@@ -46,7 +46,6 @@ jobs:
             -only="ubuntu-24_04.azure-arm.image" \
             -var="use_azure_cli_auth=true" \
             -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
-            -var="location=${{ env.LOCATION }}" \
             -var="managed_image_name=${{ env.IMAGE_NAME }}" \
             -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
             -var="image_os=ubuntu24" \
