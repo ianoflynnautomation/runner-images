@@ -38,14 +38,13 @@ jobs:
 
       - name: Build Image with Packer
         run: |
-          packer plugins install github.com/hashicorp/azure  # Reinstall to be safe
+          packer plugins install github.com/hashicorp/azure
 
-          packer init images/ubuntu/templates/ || echo "No required_plugins - continuing"
+          packer init images/ubuntu/templates/ || echo "No required_plugins"
 
           packer build \
             -only="ubuntu-24_04.azure-arm.image" \
-            -var="client_id=${{ secrets.AZURE_CLIENT_ID }}" \
-            -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -var="use_azure_cli_auth=true" \
             -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var="location=${{ env.LOCATION }}" \
             -var="managed_image_name=${{ env.IMAGE_NAME }}" \
