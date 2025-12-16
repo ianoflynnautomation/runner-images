@@ -38,12 +38,12 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y sudo lsb-release 
     /tmp/scripts/build/install-azcopy.sh && \
     /tmp/scripts/build/install-azure-cli.sh && \
     /tmp/scripts/build/install-azure-devops-cli.sh && \
-    /tmp/scripts/build/install-bicep.sh && \
-    /tmp/scripts/build/install-aws-tools.sh && \
+    # /tmp/scripts/build/install-bicep.sh && \
+    # /tmp/scripts/build/install-aws-tools.sh && \
     /tmp/scripts/build/install-git.sh && \
     /tmp/scripts/build/install-git-lfs.sh && \
     /tmp/scripts/build/install-github-cli.sh && \
-    /tmp/scripts/build/install-google-cloud-cli.sh && \
+    # /tmp/scripts/build/install-google-cloud-cli.sh && \
     /tmp/scripts/build/install-nvm.sh && \
     /tmp/scripts/build/install-nodejs.sh && \
     /tmp/scripts/build/install-powershell.sh && \
