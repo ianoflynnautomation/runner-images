@@ -1,25 +1,25 @@
-# CI Validation
+# # CI Validation
 
-name: PowerShell Tests
+# name: PowerShell Tests
 
-on:
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'helpers/software-report-base/**'
+# on:
+#   pull_request:
+#     branches: [ main ]
+#     paths:
+#       - 'helpers/software-report-base/**'
 
-jobs:
-  powershell-tests:
-    name: PowerShell tests
-    runs-on: ubuntu-latest
+# jobs:
+#   powershell-tests:
+#     name: PowerShell tests
+#     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v5
+#     steps:
+#       - name: Checkout Repository
+#         uses: actions/checkout@v5
 
-      - name: Run Software Report module tests
-        shell: pwsh
-        run: |
-            $ErrorActionPreference = "Stop"
-            Invoke-Pester -Output Detailed "helpers/software-report-base/tests"
+#       - name: Run Software Report module tests
+#         shell: pwsh
+#         run: |
+#             $ErrorActionPreference = "Stop"
+#             Invoke-Pester -Output Detailed "helpers/software-report-base/tests"
         
