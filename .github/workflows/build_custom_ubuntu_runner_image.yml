@@ -14,7 +14,6 @@ jobs:
     env:
       LOCATION: switzerlandnorth
       IMAGE_NAME: action-runner-ubuntu2404-${{ github.run_number }}
-      IMAGE_TYPE: Ubuntu2404
 
     steps:
       - name: Checkout repository
@@ -37,25 +36,19 @@ jobs:
       - name: Install Azure Packer Plugin
         run: packer plugins install github.com/hashicorp/azure
 
-      - name: Determine Packer Template
-        id: template
-        run: |
-          echo "build_name=ubuntu-24_04" >> $GITHUB_OUTPUT
-          echo "image_os=ubuntu24" >> $GITHUB_OUTPUT
-
       - name: Build Image with Packer
         run: |
-          # Initialize to download required plugins and validate config
-          packer init images/ubuntu/templates/
+          packer plugins install github.com/hashicorp/azure  # Reinstall to be safe
 
-          # Build only the Ubuntu 24.04 Azure image
+          packer init images/ubuntu/templates/ || echo "No required_plugins - continuing"
+
           packer build \
-            -only="${{ steps.template.outputs.build_name }}.azure-arm" \
+            -only="ubuntu-24_04.azure-arm.image" \
             -var="client_id=${{ secrets.AZURE_CLIENT_ID }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
             -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var="location=${{ env.LOCATION }}" \
             -var="managed_image_name=${{ env.IMAGE_NAME }}" \
             -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
-            -var="image_os=${{ steps.template.outputs.image_os }}" \
+            -var="image_os=ubuntu24" \
             images/ubuntu/templates/
