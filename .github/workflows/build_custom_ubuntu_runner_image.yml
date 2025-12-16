@@ -50,5 +50,5 @@ jobs:
             -var="managed_image_name=${{ env.IMAGE_NAME }}" \
             -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
             -var="image_os=ubuntu24" \
-            -var="build_resource_group_name=pkr-temp-rg" \
+            -var="build_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
             images/ubuntu/templates/
