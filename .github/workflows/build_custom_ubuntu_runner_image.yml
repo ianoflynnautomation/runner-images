@@ -2,8 +2,6 @@ name: Build Custom Ubuntu Runner Image
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '0 0 * * 1'  # Optional: Weekly on Mondays
 
 permissions:
   contents: read
@@ -12,21 +10,15 @@ permissions:
 jobs:
   build-image:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     env:
-      LOCATION: switzerlandnorth 
+      LOCATION: switzerlandnorth
       IMAGE_NAME: action-runner-ubuntu2404-${{ github.run_number }}
       IMAGE_TYPE: Ubuntu2404
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-    #   - name: Install Packer
-    #     run: |
-    #       wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-    #       echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-    #       sudo apt update && sudo apt install packer -y
-    #       packer --version
 
       - name: Azure Login with OIDC
         uses: azure/login@v2
@@ -35,30 +27,35 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Install Packer
+        run: |
+          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt update && sudo apt install packer -y
+          packer --version
+
       - name: Install Azure Packer Plugin
         run: packer plugins install github.com/hashicorp/azure
 
       - name: Determine Packer Template
         id: template
         run: |
-          if [[ "${{ env.IMAGE_TYPE }}" == "Ubuntu2404" ]]; then
-            echo "build_name=ubuntu-24_04" >> $GITHUB_OUTPUT
-            echo "image_os=ubuntu24" >> $GITHUB_OUTPUT
-            echo "template_path=images/ubuntu" >> $GITHUB_OUTPUT
-          elif [[ "${{ env.IMAGE_TYPE }}" == "Ubuntu2204" ]]; then
-            echo "build_name=ubuntu-22_04" >> $GITHUB_OUTPUT
-            echo "image_os=ubuntu22" >> $GITHUB_OUTPUT
-            echo "template_path=images/ubuntu" >> $GITHUB_OUTPUT
-          fi
+          echo "build_name=ubuntu-24_04" >> $GITHUB_OUTPUT
+          echo "image_os=ubuntu24" >> $GITHUB_OUTPUT
 
       - name: Build Image with Packer
         run: |
-          packer build -only "${{ steps.template.outputs.build_name }}*" \
-            -var "subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
-            -var "tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-            -var "client_id=${{ secrets.AZURE_CLIENT_ID }}" \
-            -var "location=${{ env.LOCATION }}" \
-            -var "managed_image_name=${{ env.IMAGE_NAME }}" \
-            -var "managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
-            -var "image_os=${{ steps.template.outputs.image_os }}" \
-            ${{ steps.template.outputs.template_path }}
+          # Initialize to download required plugins and validate config
+          packer init images/ubuntu/templates/
+
+          # Build only the Ubuntu 24.04 Azure image
+          packer build \
+            -only="${{ steps.template.outputs.build_name }}.azure-arm" \
+            -var="client_id=${{ secrets.AZURE_CLIENT_ID }}" \
+            -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            -var="location=${{ env.LOCATION }}" \
+            -var="managed_image_name=${{ env.IMAGE_NAME }}" \
+            -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
+            -var="image_os=${{ steps.template.outputs.image_os }}" \
+            images/ubuntu/templates/
