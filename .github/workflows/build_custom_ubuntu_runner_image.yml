@@ -16,8 +16,8 @@ jobs:
       PACKER_VERSION: "1.14.3"
       IMAGE_NAME: action-runner-ubuntu2404-${{ github.run_number }}
       IMAGE_OS: ubuntu24
-      GALLERY_NAME: "runner_images_gallery"
-      IMAGE_DEFINITION: "ubuntu-2404-runner"
+      GALLERY_NAME: "sig-gha-images-swn"
+      IMAGE_DEFINITION: "github-runner-ubuntu-2404"
       TEMPLATE_PATH: images/ubuntu/templates/
       BUILD_NAME: ubuntu-24_04.azure-arm.image
 
