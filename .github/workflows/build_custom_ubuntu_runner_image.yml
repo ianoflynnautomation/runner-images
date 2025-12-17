@@ -41,17 +41,14 @@ jobs:
         run: packer version
 
       - name: Initialize Packer
-        working-directory: images/ubuntu/templates/
         run: |
-          packer init .
+          packer init images/ubuntu/templates/
 
       - name: Format Packer
-        working-directory: images/ubuntu/templates/
         run: |
-          packer fmt .
+          packer fmt images/ubuntu/templates/
 
       - name: Validate Packer template
-        working-directory: images/ubuntu/templates/
         run: |
           packer validate \
             -only="${{ env.BUILD_NAME }}" \
@@ -65,7 +62,6 @@ jobs:
             ${{ env.TEMPLATE_PATH }}
 
       - name: Build Image with Packer
-        working-directory: images/ubuntu/templates/
         run: |
           packer build \
             -only="${{ env.BUILD_NAME }}" \
