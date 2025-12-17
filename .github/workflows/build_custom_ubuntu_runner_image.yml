@@ -20,6 +20,7 @@ jobs:
       IMAGE_DEFINITION: "github-runner-ubuntu-2404"
       TEMPLATE_PATH: images/ubuntu/templates/
       BUILD_NAME: ubuntu-24_04.azure-arm.image
+      IMAGE_VERSION: "1.0.${{ github.run_number }}"
 
     steps:
       - name: Checkout repository
@@ -62,6 +63,10 @@ jobs:
             -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
             -var="image_os=${{ env.IMAGE_OS }}" \
             -var="build_resource_group_name=${{ secrets.BUILD_RG_NAME }}" \
+            -var="shared_image_gallery_destination.resource_group=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
+            -var="shared_image_gallery_destination.gallery_name=${{ env.GALLERY_NAME }}" \
+            -var="shared_image_gallery_destination.image_name=${{ env.IMAGE_DEFINITION }}" \
+            -var="shared_image_gallery_destination.image_version=${{ env.IMAGE_VERSION }}" \
             ${{ env.TEMPLATE_PATH }}
 
       - name: Build Image with Packer
@@ -75,4 +80,8 @@ jobs:
             -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
             -var="image_os=${{ env.IMAGE_OS }}" \
             -var="build_resource_group_name=${{ secrets.BUILD_RG_NAME }}" \
+            -var="shared_image_gallery_destination.resource_group=${{ secrets.IMAGE_RESOURCE_GROUP }} \
+            -var="shared_image_gallery_destination.gallery_name=${{ env.GALLERY_NAME }}" \
+            -var="shared_image_gallery_destination.image_name=${{ env.IMAGE_DEFINITION }}" \
+            -var="shared_image_gallery_destination.image_version=${{ env.IMAGE_VERSION }}" \
             ${{ env.TEMPLATE_PATH }}
