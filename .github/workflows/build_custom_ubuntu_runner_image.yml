@@ -13,7 +13,11 @@ jobs:
     timeout-minutes: 360
     env:
       LOCATION: switzerlandnorth
+      PACKER_VERSION: "1.11.2"
       IMAGE_NAME: action-runner-ubuntu2404-${{ github.run_number }}
+      IMAGE_OS: ubuntu24
+      GALLERY_NAME: "runner_images_gallery"
+      IMAGE_DEFINITION: "ubuntu-2404-runner"
 
     steps:
       - name: Checkout repository
@@ -26,22 +30,41 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Install Packer
-        run: |
-          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-          sudo apt update && sudo apt install packer -y
-          packer --version
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: ${{ env.PACKER_VERSION }}
 
-      - name: Install Azure Packer Plugin
-        run: packer plugins install github.com/hashicorp/azure
+      - name: Verify Packer installation
+        run: packer version
+
+      - name: Initialize Packer
+        working-directory: images/ubuntu/templates/
+        run: |
+          packer init .
+
+      - name: Format Packer
+        working-directory: images/ubuntu/templates/
+        run: |
+          packer fmt .
+
+      - name: Validate Packer template
+        working-directory: images/ubuntu/templates/
+        run: |
+          packer validate \
+            -only="ubuntu-24_04.azure-arm.image" \
+            -var="use_azure_cli_auth=true" \
+            -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -var="managed_image_name=${{ env.IMAGE_NAME }}" \
+            -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
+            -var="image_os=${{ env.IMAGE_OS }}" \
+            -var="build_resource_group_name=${{ secrets.BUILD_RG_NAME }}" \
+            images/ubuntu/templates/
 
       - name: Build Image with Packer
+        working-directory: images/ubuntu/templates/
         run: |
-          packer plugins install github.com/hashicorp/azure
-
-          packer init images/ubuntu/templates/ || echo "No required_plugins"
-
           packer build \
             -only="ubuntu-24_04.azure-arm.image" \
             -var="use_azure_cli_auth=true" \
@@ -49,6 +72,6 @@ jobs:
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
             -var="managed_image_name=${{ env.IMAGE_NAME }}" \
             -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
-            -var="image_os=ubuntu24" \
-            -var="build_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
+            -var="image_os=${{ env.IMAGE_OS }}" \
+            -var="build_resource_group_name=${{ secrets.BUILD_RG_NAME }}" \
             images/ubuntu/templates/
