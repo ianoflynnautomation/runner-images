@@ -40,13 +40,16 @@ jobs:
       - name: Verify Packer installation
         run: packer version
 
+      - name: Install Packer Azure Plugin
+        run: packer plugins install github.com/hashicorp/azure
+
       - name: Initialize Packer
         run: |
-          packer init images/ubuntu/templates/
+          packer init ${{ env.TEMPLATE_PATH }}
 
       - name: Format Packer
         run: |
-          packer fmt images/ubuntu/templates/
+          packer fmt ${{ env.TEMPLATE_PATH }}
 
       - name: Validate Packer template
         run: |
