@@ -13,11 +13,13 @@ jobs:
     timeout-minutes: 360
     env:
       LOCATION: switzerlandnorth
-      PACKER_VERSION: "1.11.2"
+      PACKER_VERSION: "1.14.3"
       IMAGE_NAME: action-runner-ubuntu2404-${{ github.run_number }}
       IMAGE_OS: ubuntu24
       GALLERY_NAME: "runner_images_gallery"
       IMAGE_DEFINITION: "ubuntu-2404-runner"
+      TEMPLATE_PATH: images/ubuntu/templates/
+      BUILD_NAME: ubuntu-24_04.azure-arm.image
 
     steps:
       - name: Checkout repository
@@ -52,7 +54,7 @@ jobs:
         working-directory: images/ubuntu/templates/
         run: |
           packer validate \
-            -only="ubuntu-24_04.azure-arm.image" \
+            -only="${{ env.BUILD_NAME }}" \
             -var="use_azure_cli_auth=true" \
             -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
@@ -60,13 +62,13 @@ jobs:
             -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
             -var="image_os=${{ env.IMAGE_OS }}" \
             -var="build_resource_group_name=${{ secrets.BUILD_RG_NAME }}" \
-            images/ubuntu/templates/
+            ${{ env.TEMPLATE_PATH }}
 
       - name: Build Image with Packer
         working-directory: images/ubuntu/templates/
         run: |
           packer build \
-            -only="ubuntu-24_04.azure-arm.image" \
+            -only="${{ env.BUILD_NAME }}" \
             -var="use_azure_cli_auth=true" \
             -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
@@ -74,4 +76,4 @@ jobs:
             -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
             -var="image_os=${{ env.IMAGE_OS }}" \
             -var="build_resource_group_name=${{ secrets.BUILD_RG_NAME }}" \
-            images/ubuntu/templates/
+            ${{ env.TEMPLATE_PATH }}
