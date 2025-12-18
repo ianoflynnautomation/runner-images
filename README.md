@@ -1,20 +1,210 @@
-# GitHub Actions Runner Images
+# GitHub Actions Runner Images (Custom Fork)
+
+> **Note:** This is a custom fork of the [GitHub Actions Runner Images](https://github.com/actions/runner-images) repository. This fork includes customizations for building and managing Ubuntu runner images in Azure using Terraform infrastructure and automated GitHub Actions workflows.
 
 **Table of Contents**
 
-- [About](#about)
+- [About This Fork](#about-this-fork)
+- [Custom Features](#custom-features)
+- [Quick Start](#quick-start)
+- [Terraform Infrastructure](#terraform-infrastructure)
+- [GitHub Actions Workflow](#github-actions-workflow)
 - [Available Images](#available-images)
-- [Announcements](#announcements)
 - [Image Definitions](#image-definitions)
-- [Image Releases](#image-releases)
 - [Software and Image Support](#software-and-image-support)
 - [How to Interact with the Repo](#how-to-interact-with-the-repo)
 - [FAQs](#faqs)
 
+## About This Fork
+
+This repository is a fork of the official [GitHub Actions Runner Images](https://github.com/actions/runner-images) repository, customized to build and manage Ubuntu runner images in Azure. The fork includes:
+
+- **Terraform Infrastructure**: Automated provisioning of Azure Compute Gallery, user-assigned managed identity, and federated identity credentials for secure OIDC authentication
+- **Custom GitHub Actions Workflow**: Automated image building and validation workflow that uses OIDC authentication
+- **Custom Image Definitions**: Pre-configured image definitions for Ubuntu 22.04 and 24.04 in Azure Compute Gallery
+
+This fork maintains compatibility with the upstream repository while adding infrastructure-as-code capabilities and automated CI/CD for image building.
+
+## Custom Features
+
+### Terraform Infrastructure
+
+The `terraform/` directory contains infrastructure code to provision:
+
+- **Azure Compute Gallery (Shared Image Gallery)**: Centralized repository for versioned VM images
+- **User-Assigned Managed Identity**: Identity used by Packer for Azure authentication
+- **Federated Identity Credential**: OIDC-based authentication for GitHub Actions workflows
+- **Resource Groups**: Separate resource groups for images, build resources, and networking
+- **Role Assignments**: Proper RBAC permissions for the managed identity
+
+### GitHub Actions Workflow
+
+The `.github/workflows/build_custom_ubuntu_runner_image.yaml` workflow provides:
+
+- **Automated Image Building**: Triggered manually via `workflow_dispatch`
+- **OIDC Authentication**: Secure authentication to Azure without storing secrets
+- **Packer Integration**: Automated Packer template validation and image building
+- **Version Management**: Automatic versioning based on GitHub run numbers
+- **Multi-Image Support**: Matrix strategy for building multiple Ubuntu versions
+
+## Quick Start
+
+### Prerequisites
+
+1. **Azure Subscription**: An active Azure subscription with appropriate permissions
+2. **GitHub Repository**: This repository with GitHub Actions enabled
+3. **Terraform**: Version >= 1.9.0, < 2.0.0
+4. **Azure CLI**: For authentication and resource management
+
+### Step 1: Deploy Terraform Infrastructure
+
+1. Navigate to the `terraform/` directory:
+   ```bash
+   cd terraform
+   ```
+
+2. Create a `terraform.tfvars` file with your configuration:
+   ```hcl
+   subscription_id            = "your-subscription-id"
+   location                   = "switzerlandnorth"
+   name                       = "your-gallery-name"
+   image_resource_group_name  = "rg-images"
+   build_resource_group_name  = "rg-build"
+   network_resource_group_name = "rg-network"
+   github_repo               = "your-org/your-repo"
+   github_branch             = "refs/heads/main"
+   publisher                 = "YourOrganization"
+   ```
+
+3. Initialize and apply Terraform:
+   ```bash
+   terraform init
+   terraform plan
+   terraform apply
+   ```
+
+4. Note the output values, especially `workload_identity_client_id`:
+   ```bash
+   terraform output workload_identity_client_id
+   ```
+
+### Step 2: Configure GitHub Secrets
+
+Add the following secrets to your GitHub repository:
+
+- `AZURE_CLIENT_ID`: The client ID from the Terraform output (`workload_identity_client_id`)
+- `AZURE_TENANT_ID`: Your Azure tenant ID
+- `AZURE_SUBSCRIPTION_ID`: Your Azure subscription ID
+- `IMAGE_RESOURCE_GROUP`: The resource group name where images are stored (e.g., `rg-images`)
+- `BUILD_RG_NAME`: The resource group name for build resources (e.g., `rg-build`)
+
+### Step 3: Update Workflow Configuration
+
+Update the workflow file `.github/workflows/build_custom_ubuntu_runner_image.yaml` with your specific values:
+
+- `GALLERY_NAME`: Your Azure Compute Gallery name
+- `LOCATION`: Your Azure region
+- Matrix configuration for the images you want to build
+
+### Step 4: Build Images
+
+1. Go to the **Actions** tab in your GitHub repository
+2. Select **Build Custom Ubuntu Runner Image**
+3. Click **Run workflow**
+4. Monitor the workflow execution
+
+The built images will be available in your Azure Compute Gallery and can be used to create VMs or scale sets.
+
+## Terraform Infrastructure
+
+### Overview
+
+The Terraform configuration in the `terraform/` directory provisions all necessary Azure resources for building and storing runner images.
+
+### Key Resources
+
+- **`azurerm_resource_group.images`**: Resource group for storing images and the compute gallery
+- **`azurerm_resource_group.build`**: Resource group for temporary build resources
+- **`azurerm_user_assigned_identity.identity`**: Managed identity for authentication
+- **`azurerm_federated_identity_credential.github`**: OIDC credential for GitHub Actions
+- **`module.compute_gallery`**: Azure Compute Gallery with image definitions
+
+### Image Definitions
+
+The Terraform configuration includes pre-defined image definitions for:
+
+- **Ubuntu 22.04 LTS**: `github-runner-ubuntu-2204`
+- **Ubuntu 24.04 LTS**: `github-runner-ubuntu-2404`
+
+Each definition includes:
+- OS type and architecture
+- Hyper-V generation
+- Recommended VM sizes
+- End-of-life dates
+- Metadata tags
+
+### Customization
+
+To customize the infrastructure:
+
+1. Modify `terraform/variables.tf` to add or change variables
+2. Update `terraform/main.tf` to add additional image definitions or resources
+3. Adjust the `shared_image_definitions` in the compute gallery module
+
+### Outputs
+
+The Terraform configuration outputs:
+- `workload_identity_client_id`: The client ID of the managed identity (required for GitHub secrets)
+
+## GitHub Actions Workflow
+
+### Workflow Overview
+
+The `build_custom_ubuntu_runner_image.yaml` workflow automates the image building process:
+
+1. **Checkout**: Retrieves the repository code
+2. **Azure Login**: Authenticates using OIDC (no secrets required)
+3. **Packer Setup**: Installs and configures Packer
+4. **Validation**: Validates Packer templates before building
+5. **Build**: Executes Packer to build the VM image
+6. **Publish**: Publishes the image to Azure Compute Gallery
+
+### Workflow Configuration
+
+Key environment variables in the workflow:
+
+- `GALLERY_NAME`: Name of your Azure Compute Gallery
+- `LOCATION`: Azure region for resources
+- `PACKER_VERSION`: Packer version to use
+- `IMAGE_VERSION`: Version format (e.g., `1.0.{run_number}`)
+
+### Matrix Strategy
+
+The workflow uses a matrix strategy to build multiple images. Currently configured for:
+- Ubuntu 24.04 (`ubuntu24`)
+
+To add Ubuntu 22.04, uncomment the relevant lines in the matrix configuration.
+
+### Permissions
+
+The workflow requires:
+- `contents: read`: To checkout the repository
+- `id-token: write`: For OIDC authentication
+
+### Manual Trigger
+
+The workflow is triggered manually via `workflow_dispatch`. To build images:
+
+1. Navigate to Actions → Build Custom Ubuntu Runner Image
+2. Click "Run workflow"
+3. Select the branch (usually `main`)
+4. Click "Run workflow"
+
 ## About
 
 This repository contains the source code used to create the VM images for [GitHub-hosted runners](https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners) used for Actions, as well as for [Microsoft-hosted agents](https://docs.microsoft.com/en-us/azure/devops/pipelines/agents/hosted?view=azure-devops#use-a-microsoft-hosted-agent) used for Azure Pipelines.
-To build a VM machine from this repo's source, see the [instructions](docs/create-image-and-azure-resources.md).
+
+For detailed information on building images manually, see the [instructions](docs/create-image-and-azure-resources.md).
 
 ## Available Images
 
@@ -52,10 +242,6 @@ To build a VM machine from this repo's source, see the [instructions](docs/creat
 [macOS-26-arm64]: https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md
 [self-hosted runners]: https://help.github.com/en/actions/hosting-your-own-runners
 
-## Announcements
-
-See notable upcoming changes by viewing issues with the [Announcement](https://github.com/actions/runner-images/labels/Announcement) label.
-
 ## Image Definitions
 
 ### Beta
@@ -86,19 +272,14 @@ The `-latest` migration process is gradual and happens over 1-2 months in order 
 
 ## Image Releases
 
-*How to best follow along with changes*
+Images are built on-demand using the GitHub Actions workflow. Each build creates a new version in the Azure Compute Gallery with the format `1.0.{run_number}`.
 
-1. Find the latest releases for this repository [here.](https://github.com/actions/runner-images/releases)
-2. Subscribe to the releases coming out of this repository, instructions [here.](https://docs.github.com/en/account-and-profile/managing-subscriptions-and-notifications-on-github/setting-up-notifications/configuring-notifications#configuring-your-watch-settings-for-an-individual-repository)
-3. Upcoming changes: A pre-release is created when the deployment of an image has started. As soon as the deployment is finished, the pre-release is converted to a release. If you have subscribed to releases, you will get notified of pre-releases as well.
+To track image builds:
+- Monitor the GitHub Actions workflow runs
+- Check the Azure Compute Gallery for new image versions
+- Review the workflow logs for build details and any issues
 
-   - You can also track upcoming changes using the [awaiting-deployment](https://github.com/actions/runner-images/labels/awaiting-deployment) label.
-4. For high impact changes, we will post these in advance to the GitHub Changelog on our [blog](https://github.blog/changelog/) and on [twitter](https://twitter.com/GHchangelog).
-   - Ex: breaking changes, GA or deprecation of images
-
-*Cadence*
-
-- We typically deploy weekly updates to the software on the runner images.
+*Note:* This fork builds images independently from the upstream repository. For information about upstream releases, see the [original repository](https://github.com/actions/runner-images).
 
 ## Software and Image Support
 
@@ -164,9 +345,12 @@ In general, these are the guidelines we follow when deciding what to pre-install
 
 ## How to Interact with the Repo
 
-- **Issues**: To file a bug report, or request tools to be added/updated, please [open an issue using the appropriate template](https://github.com/actions/runner-images/issues/new/choose)
-- **Discussions**: If you want to share your thoughts about image configuration, installed software, or bring a new idea, please create a new topic in a [discussion](https://github.com/actions/runner-images/discussions) for a corresponding category. Before making a new discussion please make sure no similar topics were created earlier.
-- For general questions about using the runner images or writing your Actions workflow, please open requests in the [GitHub Actions Community Forum](https://github.community/c/github-actions/41).
+This is a custom fork, so interaction is limited to this repository:
+
+- **Issues**: Use this repository's issue tracker for bug reports or feature requests specific to this fork
+- **Pull Requests**: Contributions to this fork are welcome
+- **Upstream Issues**: For issues related to the upstream runner-images project, please use the [original repository](https://github.com/actions/runner-images)
+- **General Questions**: For general questions about GitHub Actions or runner images, see the [GitHub Actions Community Forum](https://github.community/c/github-actions/41)
 
 ## FAQs
 
@@ -212,6 +396,79 @@ Please create an issue and get an approval from us to add this tool to the image
 
 <details>
    <summary><b><i>What branch should I use to build custom image?</b></i></summary>
-We strongly encourage customers to build their own images using the main branch.
+We strongly encourage building images using the main branch.
 This repository contains multiple branches and releases that serve as document milestones to reflect what software is installed in the images at certain point of time. Current builds are not idempotent and if one tries to build a runner image using the specific tag it is not guaranteed that the build will succeed.
+
+For this fork, use the GitHub Actions workflow which builds from the branch you select when triggering the workflow.
 </details>
+
+<details>
+   <summary><b><i>How do I customize the image definitions?</b></i></summary>
+To customize image definitions:
+
+1. **Add new image definitions**: Edit `terraform/main.tf` and add entries to the `shared_image_definitions` map in the compute gallery module
+2. **Modify existing definitions**: Update the existing entries in `terraform/main.tf`
+3. **Update workflow matrix**: Add or modify entries in `.github/workflows/build_custom_ubuntu_runner_image.yaml` matrix strategy
+4. **Customize toolset**: Modify the toolset JSON files in `images/ubuntu/toolsets/` to change installed software
+
+After making changes, run `terraform plan` and `terraform apply` to update the infrastructure, then trigger the workflow to build new images.
+</details>
+
+<details>
+   <summary><b><i>How do I use the built images?</b></i></summary>
+Once images are built and published to your Azure Compute Gallery, you can:
+
+1. **Create VMs directly**: Use Azure Portal, CLI, or Terraform to create VMs from the gallery images
+2. **Use in VM Scale Sets**: Reference the gallery image in your scale set configuration
+3. **Share with other subscriptions**: Configure gallery sharing in Terraform to share images across subscriptions or tenants
+
+To reference an image, use:
+- Gallery name: From your Terraform configuration
+- Image definition: e.g., `github-runner-ubuntu-2404`
+- Image version: e.g., `1.0.123` (from the workflow run number)
+</details>
+
+## Maintaining This Fork
+
+### Syncing with Upstream
+
+To keep this fork up-to-date with the upstream repository:
+
+1. **Add upstream remote** (if not already added):
+   ```bash
+   git remote add upstream https://github.com/actions/runner-images.git
+   ```
+
+2. **Fetch upstream changes**:
+   ```bash
+   git fetch upstream
+   ```
+
+3. **Merge upstream changes**:
+   ```bash
+   git checkout main
+   git merge upstream/main
+   ```
+
+4. **Resolve conflicts**: If conflicts occur, resolve them carefully, especially in:
+   - `images/ubuntu/` directories (image build scripts)
+   - `.github/workflows/` (if you want to keep upstream workflows)
+   - `terraform/` (your custom infrastructure - likely no conflicts)
+
+5. **Test after syncing**: After syncing, test the workflow to ensure images still build correctly
+
+### Custom Files to Preserve
+
+When syncing with upstream, be careful to preserve:
+- `terraform/` directory (entire directory is custom)
+- `.github/workflows/build_custom_ubuntu_runner_image.yaml` (custom workflow)
+- Any modifications to Packer templates in `images/ubuntu/templates/`
+- Custom toolset configurations in `images/ubuntu/toolsets/`
+
+### Original Repository
+
+This fork is based on the [GitHub Actions Runner Images](https://github.com/actions/runner-images) repository. For issues, discussions, or contributions related to the upstream project, please use the original repository.
+
+---
+
+**License**: This fork maintains the same license as the upstream repository. See [LICENSE](LICENSE) for details.
