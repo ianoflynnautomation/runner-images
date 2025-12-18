@@ -103,7 +103,7 @@ provisioner "shell" {
       "${path.root}/../scripts/build/install-azcopy.sh",
       "${path.root}/../scripts/build/install-azure-cli.sh",
       "${path.root}/../scripts/build/install-azure-devops-cli.sh",
-      # "${path.root}/../scripts/build/install-bicep.sh",
+      "${path.root}/../scripts/build/install-bicep.sh",
       "${path.root}/../scripts/build/install-apache.sh",
       # "${path.root}/../scripts/build/install-aws-tools.sh",
       # "${path.root}/../scripts/build/install-clang.sh",
@@ -142,7 +142,7 @@ provisioner "shell" {
       # "${path.root}/../scripts/build/install-vcpkg.sh",
       "${path.root}/../scripts/build/configure-dpkg.sh",
       "${path.root}/../scripts/build/install-yq.sh",
-      # "${path.root}/../scripts/build/install-android-sdk.sh",
+      "${path.root}/../scripts/build/install-android-sdk.sh",
       "${path.root}/../scripts/build/install-pypy.sh",
       "${path.root}/../scripts/build/install-python.sh",
       "${path.root}/../scripts/build/install-zstd.sh"
