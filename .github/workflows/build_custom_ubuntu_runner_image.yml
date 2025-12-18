@@ -17,11 +17,11 @@ jobs:
       matrix:
         include:
           - image_os: ubuntu22
-            os_version: "22.04"
+            os_version: "22_04"
             image_definition: "github-runner-ubuntu-2204"
             base_sku: "22_04-lts-gen2"
           - image_os: ubuntu24
-            os_version: "24.04"
+            os_version: "24_04"
             image_definition: "github-runner-ubuntu-2404"
             base_sku: "24_04-lts-gen2"
 
@@ -32,7 +32,7 @@ jobs:
       GALLERY_NAME: "sigghaimagesswn"
       TEMPLATE_PATH: images/ubuntu/templates/
       BUILD_NAME: ubuntu-${{ matrix.os_version }}.azure-arm.image
-      IMAGE_VERSION: "$$ {{ github.ref_name == 'main' && '1.0.' || '0.1.' }} $${{ github.run_number }}"
+      IMAGE_VERSION: "1.0.${{ github.run_number }}"
 
     steps:
       - name: Checkout repository
