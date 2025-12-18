@@ -40,8 +40,8 @@ build {
   provisioner "file" {
     destination = "${var.image_folder}"
     sources     = [
-      "${path.root}/../assets/post-gen"
-      "${path.root}/../scripts/tests",
+      "${path.root}/../assets/post-gen",
+      "${path.root}/../scripts/tests"
       # "${path.root}/../scripts/docs-gen"
     ]
   }
