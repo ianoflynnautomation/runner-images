@@ -26,13 +26,21 @@ variable "object_id" {
 
 variable "oidc_request_token" {
   type    = string
-  description = "OIDC Request Token is used for GitHub Actions OIDC, this token is used with oidc_request_url to fetch access tokens to Azure Value in GitHub Actions can be extracted from the ACTIONS_ID_TOKEN_REQUEST_TOKEN variable Refer to Configure a federated identity credential on an app for details on how setup GitHub Actions OIDC authentication"
+  description = <<DESCRIPTION 
+  OIDC Request Token is used for GitHub Actions OIDC, this token is used with oidc_request_url 
+  to fetch access tokens to Azure Value in GitHub Actions can be extracted 
+  from the ACTIONS_ID_TOKEN_REQUEST_TOKEN variable Refer to Configure a federated identity 
+  credential on an app for details on how setup GitHub Actions OIDC authentication
+  DESCRIPTION
   default = ""
 }
 
 variable "oidc_request_url" {
   type    = string
-  description = "OIDC Request URL is used for GitHub Actions OIDC, this token is used with oidc_request_url to fetch access tokens to Azure Value in GitHub Actions can be extracted from the ACTIONS_ID_TOKEN_REQUEST_URL variable"
+  description = <<DESCRIPTION
+  OIDC Request URL is used for GitHub Actions OIDC, this token is used with oidc_request_url to fetch 
+  access tokens to Azure Value in GitHub Actions can be extracted from the ACTIONS_ID_TOKEN_REQUEST_URL variable
+  DESCRIPTION
   default = ""
 }
 
@@ -48,20 +56,34 @@ variable "tenant_id" {
 
 variable "use_azure_cli_auth" {
   type    = bool
-  description = "Flag to use Azure CLI authentication. Defaults to false. CLI auth will use the information from an active az login session to connect to Azure and set the subscription id and tenant id associated to the signed in account. If enabled, it will use the authentication provided by the az CLI. Azure CLI authentication will use the credential marked as isDefault and can be verified using az account show. Works with normal authentication (az login) and service principals (az login --service-principal --username APP_ID --password PASSWORD --tenant TENANT_ID). Ignores all other configurations if enabled."
+  description = <<DESCRIPTION
+  Flag to use Azure CLI authentication. Defaults to false. 
+  CLI auth will use the information from an active az login session to connect to Azure and set the subscription id and tenant id associated to the signed in account. 
+  If enabled, it will use the authentication provided by the az CLI. 
+  Azure CLI authentication will use the credential marked as isDefault and can be verified using az account show. 
+  Works with normal authentication (az login) and service principals (az login --service-principal --username APP_ID --password PASSWORD --tenant TENANT_ID). 
+  Ignores all other configurations if enabled.
+  DESCRIPTION
   default = false
 }
 
 // Azure environment related variables
 variable "allowed_inbound_ip_addresses" {
   type    = list(string)
-  description = "Specify the list of IP addresses and CIDR blocks that should be allowed access to the VM. If provided, an Azure Network Security Group will be created with corresponding rules and be bound to the subnet of the VM. Providing allowed_inbound_ip_addresses in combination with virtual_network_name is not allowed."
+  description = <<DESCRIPTION
+  Specify the list of IP addresses and CIDR blocks that should be allowed access to the VM. 
+  If provided, an Azure Network Security Group will be created with corresponding rules and be bound to the subnet of the VM. 
+  Providing allowed_inbound_ip_addresses in combination with virtual_network_name is not allowed.
+  DESCRIPTION
   default = []
 }
 
 variable "azure_tags" {
   type    = map(string)
-  description = "Name/value pair tags to apply to every resource deployed i.e. Resource Group, VM, NIC, VNET, Public IP, KeyVault, etc. The user can define up to 50 tags. Tag names cannot exceed 512 characters, and tag values cannot exceed 256 characters."
+  description = <<DESCRIPTION
+  Name/value pair tags to apply to every resource deployed i.e. Resource Group, VM, NIC, VNET, Public IP, KeyVault, etc. 
+  The user can define up to 50 tags. Tag names cannot exceed 512 characters, and tag values cannot exceed 256 characters.
+  DESCRIPTION
   default = {}
 }
 
@@ -78,7 +100,11 @@ variable "gallery_image_name" {
 
 variable "gallery_image_version" {
   type    = string
-  description = "Specify a specific version of an OS to boot from. Defaults to latest. There may be a difference in versions available across regions due to image synchronization latency. To ensure a consistent version across regions set this value to one that is available in all regions where you are deploying."
+  description = <<DESCRIPTION
+  Specify a specific version of an OS to boot from. Defaults to latest. 
+  There may be a difference in versions available across regions due to image synchronization latency. 
+  To ensure a consistent version across regions set this value to one that is available in all regions where you are deploying.
+  DESCRIPTION
   default = "${env("GALLERY_IMAGE_VERSION")}"
 }
 
@@ -110,13 +136,22 @@ variable "location" {
 
 variable "managed_image_name" {
   type    = string
-  description = "Specify the managed image name where the result of the Packer build will be saved. The image name must not exist ahead of time, and will not be overwritten. If this value is set, the value managed_image_resource_group_name must also be set. See documentation to learn more about managed images."
+  description = <<DESCRIPTION
+  Specify the managed image name where the result of the Packer build will be saved. 
+  The image name must not exist ahead of time, and will not be overwritten. 
+  If this value is set, the value managed_image_resource_group_name must also be set. 
+  See documentation to learn more about managed images.
+  DESCRIPTION
   default = ""
 }
 
 variable "managed_image_resource_group_name" {
   type    = string
-  description = "Specify the managed image resource group name where the result of the Packer build will be saved. The resource group must already exist. If this value is set, the value managed_image_name must also be set. See documentation to learn more about managed images."
+  description = <<DESCRIPTION
+  Specify the managed image resource group name where the result of the Packer build will be saved. 
+  The resource group must already exist. If this value is set, the value managed_image_name must also be set. 
+  See documentation to learn more about managed images.
+  DESCRIPTION
   default = "${env("ARM_RESOURCE_GROUP")}"
 }
 
@@ -133,7 +168,10 @@ validation {
 
 variable "private_virtual_network_with_public_ip" {
   type    = bool
-  description = "his value allows you to set a virtual_network_name and obtain a public IP. If this value is not set and virtual_network_name is defined Packer is only allowed to be executed from a host on the same subnet / virtual network."
+  description = <<DESCRIPTION
+  This value allows you to set a virtual_network_name and obtain a public IP. 
+  If this value is not set and virtual_network_name is defined Packer is only allowed to be executed from a host on the same subnet / virtual network.
+  DESCRIPTION
   default = false
 }
 
@@ -150,31 +188,50 @@ variable "source_image_version" {
 
 variable "ssh_clear_authorized_keys" {
   type    = bool
-  description = "If true, Packer will attempt to remove its temporary key from ~/.ssh/authorized_keys and /root/.ssh/authorized_keys. This is a mostly cosmetic option, since Packer will delete the temporary private key from the host system regardless of whether this is set to true (unless the user has set the -debug flag). Defaults to "false"; currently only works on guests with sed installed."
+  description = <<DESCRIPTION
+  If true, Packer will attempt to remove its temporary key from ~/.ssh/authorized_keys and /root/.ssh/authorized_keys. 
+  This is a mostly cosmetic option, since Packer will delete the temporary private key from the host system regardless of whether this is set to true (unless the user has set the -debug flag). 
+  Defaults to "false"; currently only works on guests with sed installed.
+  DESCRIPTION
   default = true
 }
 
 variable "temp_resource_group_name" {
   type    = string
-  description = "name assigned to the temporary resource group created during the build. If this value is not set, a random value will be assigned. This resource group is deleted at the end of the build."
+  description = <<DESCRIPTION
+  Name assigned to the temporary resource group created during the build. 
+  If this value is not set, a random value will be assigned. 
+  This resource group is deleted at the end of the build.
+  DESCRIPTION
   default = "${env("TEMP_RESOURCE_GROUP_NAME")}"
 }
 
 variable "virtual_network_name" {
   type    = string
-  description = "Use a pre-existing virtual network for the VM. This option enables private communication with the VM, no public IP address is used or provisioned (unless you set private_virtual_network_with_public_ip)."
+  description = <<DESCRIPTION
+  Use a pre-existing virtual network for the VM. This option enables private communication with the VM,
+  no public IP address is used or provisioned (unless you set private_virtual_network_with_public_ip).
+  DESCRIPTION
   default = "${env("VNET_NAME")}"
 }
 
 variable "virtual_network_resource_group_name" {
   type    = string
-  description = "If virtual_network_name is set, this value may also be set. If virtual_network_name is set, and this value is not set the builder attempts to determine the resource group containing the virtual network. If the resource group cannot be found, or it cannot be disambiguated, this value should be set."
+  description = <<DESCRIPTION
+  If virtual_network_name is set, this value may also be set. 
+  If virtual_network_name is set, and this value is not set the builder attempts to determine the resource group containing the virtual network. 
+  If the resource group cannot be found, or it cannot be disambiguated, this value should be set.
+  DESCRIPTION
   default = "${env("VNET_RESOURCE_GROUP")}"
 }
 
 variable "virtual_network_subnet_name" {
   type    = string
-  description = "If virtual_network_name is set, this value may also be set. If virtual_network_name is set, and this value is not set the builder attempts to determine the subnet to use with the virtual network. If the subnet cannot be found, or it cannot be disambiguated, this value should be set."
+  description = <<DESCRIPTION
+  If virtual_network_name is set, this value may also be set. 
+  If virtual_network_name is set, and this value is not set the builder attempts to determine the subnet to use with the virtual network. 
+  If the subnet cannot be found, or it cannot be disambiguated, this value should be set.
+  DESCRIPTION
   default = "${env("VNET_SUBNET")}"
 }
 
@@ -247,7 +304,7 @@ variable "spot_instance" {
     max_price    = number
     eviction_policy = string
   })
-  description = " If set use a spot instance during build; spot configuration settings only apply to the virtual machine launched by Packer and will not be persisted on the resulting image artifact."
+  description = "If set use a spot instance during build; spot configuration settings only apply to the virtual machine launched by Packer and will not be persisted on the resulting image artifact."
   default = {
     enabled      = true
     max_price    = 0.20
@@ -257,7 +314,12 @@ variable "spot_instance" {
 
 variable "shared_image_gallery_timeout" {
   type    = string
-  description = "duration string | ex: "1h5m2s") - How long to wait for an image to be published to the shared image gallery before timing out. If your Packer build is failing on the Publishing to Shared Image Gallery step with the error Original Error: context deadline exceeded, but the image is present when you check your Azure dashboard, then you probably need to increase this timeout from its default of "60m" (valid time units include s for seconds, m for minutes, and h for hours.)"
+  description = <<DESCRIPTION
+  How long to wait for an image to be published to the shared image gallery before timing out. 
+  If your Packer build is failing on the Publishing to Shared Image Gallery step with the error Original 
+  Error: context deadline exceeded, but the image is present when you check your Azure dashboard,
+  then you probably need to increase this timeout from its default of "60m" (valid time units include s for seconds, m for minutes, and h for hours.)
+  DESCRIPTION
   default =  "60m"
 }
 
