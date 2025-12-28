@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   build-image:
+    #runs-on: ubuntu-slim
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -65,12 +66,17 @@ jobs:
           packer fmt ${{ env.TEMPLATE_PATH }}
 
       - name: Validate Packer Template
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
         run: |
           packer validate \
             -only="${{ env.BUILD_NAME }}" \
-            -var="use_azure_cli_auth=true" \
+            -var="client_id=${{ secrets.AZURE_CLIENT_ID }}" \
             -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -var="oidc_request_token=${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}" \
+            -var="oidc_request_url=${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}" \
             -var="managed_image_name=${{ matrix.image_definition }}" \
             -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
             -var="image_os=${{ matrix.image_os }}" \
@@ -82,14 +88,19 @@ jobs:
             ${{ env.TEMPLATE_PATH }}
 
       - name: Build Image with Packer
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
         run: |
           echo "Building ${{ matrix.image_definition }} (Ubuntu ${{ matrix.os_version }}) - Version ${{ env.IMAGE_VERSION }}"
 
           packer build \
             -only="${{ env.BUILD_NAME }}" \
-            -var="use_azure_cli_auth=true" \
+            -var="client_id=${{ secrets.AZURE_CLIENT_ID }}" \
             -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -var="oidc_request_token=${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}" \
+            -var="oidc_request_url=${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}" \
             -var="managed_image_name=${{ matrix.image_definition }}" \
             -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
             -var="image_os=${{ matrix.image_os }}" \
@@ -99,3 +110,13 @@ jobs:
             -var="gallery_image_name=${{ matrix.image_definition }}" \
             -var="gallery_image_version=${{ env.IMAGE_VERSION }}" \
             ${{ env.TEMPLATE_PATH }}
+
+      - name: Upload Build Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packer-logs-${{ matrix.image_os }}
+          path: |
+            *.log
+            packer-manifest.json
+          retention-days: 7

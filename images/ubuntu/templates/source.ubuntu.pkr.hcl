@@ -8,6 +8,7 @@ source "azure-arm" "image" {
   subscription_id                        = var.subscription_id
   tenant_id                              = var.tenant_id
   use_azure_cli_auth                     = var.use_azure_cli_auth
+  skip_create_image                      = var.skip_create_image
 
   allowed_inbound_ip_addresses           = var.allowed_inbound_ip_addresses
   build_resource_group_name              = var.build_resource_group_name
@@ -38,6 +39,16 @@ source "azure-arm" "image" {
     image_version                        = var.gallery_image_version
     storage_account_type                 = var.gallery_storage_account_type
   }
+
+  shared_image_gallery_timeout                     = var.shared_image_gallery_timeout
+  shared_gallery_image_version_end_of_life_date    = var.shared_gallery_image_version_end_of_life_date
+  shared_gallery_image_version_replica_count       = var.shared_gallery_image_version_replica_count
+  shared_gallery_image_version_exclude_from_latest = var.shared_gallery_image_version_exclude_from_latest
+
+  spot {
+    eviction_policy = var.spot_instance.enabled ? var.spot_instance.eviction_policy : ""
+    max_price       = var.spot_instance.enabled ? var.spot_instance.max_price : -1
+}
 
   dynamic "azure_tag" {
     for_each = var.azure_tags
