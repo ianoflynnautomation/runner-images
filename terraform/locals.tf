@@ -9,7 +9,7 @@ locals {
   }
 
   runner_manifest = {
-    "ubuntu22" = {
+    "ubuntu-2204" = {
       os_type  = "Linux"
       version  = "22.04"
       sku      = "ubuntu-2204-lts-gen2"
@@ -17,7 +17,7 @@ locals {
       max_vcpu = 32
       max_mem  = 128
     }
-    "ubuntu24" = {
+    "ubuntu-2404" = {
       os_type  = "Linux"
       version  = "24.04"
       sku      = "ubuntu-2404-lts-gen2"
