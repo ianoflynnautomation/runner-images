@@ -239,7 +239,7 @@ DESCRIPTION
 variable "vm_size" {
   type    = string
   description = "Size of the VM used for building. This can be changed when you deploy a VM from your VHD. See pricing information. Defaults to Standard_A1."
-  default = "Standard_D4s_v4"
+  default = "Standard_D2s_v4"
 }
 
 variable "winrm_username" {         // The username used to connect to the VM via WinRM
