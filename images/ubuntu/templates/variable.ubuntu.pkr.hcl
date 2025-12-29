@@ -1,4 +1,3 @@
-// Authentication related variables
 variable "client_cert_path" {
   type    = string
   description = "The path to a PKCS#12 bundle (.pfx file) to be used as the client certificate that will be used to authenticate as the specified AAD SP."
@@ -68,7 +67,6 @@ DESCRIPTION
   default = false
 }
 
-// Azure environment related variables
 variable "allowed_inbound_ip_addresses" {
   type    = list(string)
   description = <<DESCRIPTION
@@ -242,12 +240,11 @@ variable "vm_size" {
   default = "Standard_D2s_v4"
 }
 
-variable "winrm_username" {         // The username used to connect to the VM via WinRM
-    type    = string                // Also applies to the username used to create the VM
+variable "winrm_username" {
+    type    = string
     default = "packer"
 }
 
-// Image related variables
 variable "dockerhub_login" {
   type    = string
   default = "${env("DOCKERHUB_LOGIN")}"

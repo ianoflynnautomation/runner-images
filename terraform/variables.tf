@@ -53,15 +53,15 @@ DESCRIPTION
   nullable    = false
 }
 
-variable "name" {
+variable "gallery_name" {
   type        = string
   description = <<DESCRIPTION
-(Required) Specifies the name of the Shared Image Gallery. Changing this forces a new resource to be created.
-DESCRIPTION
+  (Required) Specifies the name of the Shared Image Gallery. Changing this forces a new resource to be created.
+  DESCRIPTION
   nullable    = false
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,78}[A-Za-z0-9])?$", var.name))
+    condition     = can(regex("^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,78}[A-Za-z0-9])?$", var.gallery_name))
     error_message = "The name must be between 1 and 80characters long and can only contain lowercase letters and numbers."
   }
 }
@@ -240,4 +240,11 @@ variable "timeouts" {
  - `read` - (Defaults to 5 minutes) Used when retrieving the Shared Image Gallery.
  - `update` - (Defaults to 60 minutes) Used when updating the Shared Image Gallery.
 DESCRIPTION
+}
+
+
+variable "enable_trusted_launch" {
+  description = "Enable Trusted Launch for image definitions"
+  type        = bool
+  default     = false
 }

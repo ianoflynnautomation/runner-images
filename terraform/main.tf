@@ -24,7 +24,7 @@ resource "azurerm_resource_group" "network" {
   tags = var.tags
 }
 
-resource "azurerm_user_assigned_identity" "identity" {
+resource "azurerm_user_assigned_identity" "packer" {
   name                = var.identity_name
   resource_group_name = azurerm_resource_group.images.name
   location            = azurerm_resource_group.images.location
@@ -32,24 +32,38 @@ resource "azurerm_user_assigned_identity" "identity" {
 
 resource "azurerm_role_assignment" "packer_gallery_admin" {
   scope                = azurerm_resource_group.images.id
-  role_definition_name = "Compute Gallery Sharing Admin" 
-  principal_id         = azurerm_user_assigned_identity.identity.principal_id
+  role_definition_name = "Compute Gallery Sharing Admin"
+  principal_id         = azurerm_user_assigned_identity.packer.principal_id
+  description          = "Allows Packer to publish images to Azure Compute Gallery"
 }
 
-resource "azurerm_role_assignment" "image_build_rg_contributor" {
+resource "azurerm_role_assignment" "packer_build_contributor" {
   scope                = azurerm_resource_group.build.id
   role_definition_name = "Contributor"
-  principal_id         = azurerm_user_assigned_identity.identity.principal_id
+  principal_id         = azurerm_user_assigned_identity.packer.principal_id
+  description          = "Allows Packer to create/delete build resources"
 }
 
+resource "azurerm_role_assignment" "packer_vm_contributor" {
+  scope                = azurerm_resource_group.images.id
+  role_definition_name = "Virtual Machine Contributor"
+  principal_id         = azurerm_user_assigned_identity.packer.principal_id
+  description          = "Allows Packer to manage VMs during image builds"
+}
 
-resource "azurerm_federated_identity_credential" "github" {
+resource "azurerm_role_assignment" "packer_gallery_publisher" {
+  scope                = azurerm_resource_group.images.id
+  role_definition_name = "Compute Gallery Artifacts Publisher"
+  principal_id         = azurerm_user_assigned_identity.packer.principal_id
+  description          = "Allows Packer to create and read image versions in the gallery"
+}
 
-  name                = "github-actions-federated"
+resource "azurerm_federated_identity_credential" "github_main" {
+  name                = "github-actions-main"
   resource_group_name = azurerm_resource_group.images.name
-  parent_id           = azurerm_user_assigned_identity.identity.id
+  parent_id           = azurerm_user_assigned_identity.packer.id
   issuer              = "https://token.actions.githubusercontent.com"
-  subject             = "repo:${var.github_repo}:ref:${var.github_branch}"
+  subject             = "repo:${var.github_repo}:ref:refs/heads/main"
   audience            = ["api://AzureADTokenExchange"]
 }
 
@@ -57,7 +71,7 @@ module "compute_gallery" {
   source  = "Azure/avm-res-compute-gallery/azurerm"
   version = "0.2.0"
 
-  name                = var.name
+  name                = var.gallery_name
   location            = azurerm_resource_group.images.location
   resource_group_name = azurerm_resource_group.images.name
   description         = "Azure Compute Gallery containing versioned GitHub Actions self-hosted runner images"
@@ -91,11 +105,12 @@ module "compute_gallery" {
         OSVersion        = "22.04"
         ImageType        = "GitHubActionsRunner"
         HyperVGeneration = "V1"
-        SecurityProfile  = "TrustedLaunch"
+        SecurityProfile  = var.enable_trusted_launch ? "TrustedLaunch" : "Standard"
         BuiltBy          = "Packer"
         Compliance       = "CIS-Level1"
         Owner            = "PlatformEngineering"
         Environment      = "All"
+        ManagedBy        = "Terraform"
       }
     }
     ubuntu_2404_runner = {
@@ -124,11 +139,12 @@ module "compute_gallery" {
         OSVersion        = "24.04"
         ImageType        = "GitHubActionsRunner"
         HyperVGeneration = "V1"
-        SecurityProfile  = "TrustedLaunch"
+        SecurityProfile  = var.enable_trusted_launch ? "TrustedLaunch" : "Standard"
         BuiltBy          = "Packer"
         Compliance       = "CIS-Level1"
         Owner            = "PlatformEngineering"
         Environment      = "All"
+        ManagedBy        = "Terraform"
       }
     }
   }

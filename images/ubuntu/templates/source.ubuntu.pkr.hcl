@@ -42,7 +42,6 @@ source "azure-arm" "image" {
 
   shared_image_gallery_timeout                     = var.shared_image_gallery_timeout
   shared_gallery_image_version_end_of_life_date    = var.shared_gallery_image_version_end_of_life_date
-  # shared_gallery_image_version_replica_count       = var.shared_gallery_image_version_replica_count
   shared_gallery_image_version_exclude_from_latest = var.shared_gallery_image_version_exclude_from_latest
 
   spot {
