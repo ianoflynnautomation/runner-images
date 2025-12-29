@@ -1,0 +1,340 @@
+name: Build and Release Images
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "helpers/**"
+      - "images/**"
+      - "images.CI/**"
+      - "schemas/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "helpers/**"
+      - "images/**"
+      - "images.CI/**"
+      - "schemas/**"
+  workflow_dispatch:
+    inputs:
+      version_override:
+        description: "Version override (e.g., 2.1.0)"
+        required: false
+        type: string
+      image_os:
+        description: "Specific OS to build"
+        required: false
+        type: choice
+        options:
+          - all
+          - ubuntu22
+          - ubuntu24
+        default: all
+      skip_tests:
+        description: "Skip integration tests"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+  issues: write
+
+env:
+  LOCATION: switzerlandnorth
+  PACKER_VERSION: "1.14.3"
+  GALLERY_NAME: "sigghaimagesswn"
+  TEMPLATE_PATH: images/ubuntu/templates/
+
+jobs:
+  validate:
+    name: Validate Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate JSON Schema
+        shell: pwsh
+        run: ./helpers/CheckJsonSchema.ps1
+
+      - name: Lint Code
+        uses: github/super-linter/slim@v7
+        env:
+          VALIDATE_ALL_CODEBASE: false
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VALIDATE_JSON: true
+          VALIDATE_MARKDOWN: true
+          VALIDATE_BASH: true
+          VALIDATE_POWERSHELL: true
+          DEFAULT_BRANCH: main
+          FILTER_REGEX_EXCLUDE: .*images/.*-Readme.md
+
+      - name: Check Shebang Lines
+        run: ./images.CI/shebang-linter.ps1
+        shell: pwsh
+
+      - name: Security Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "config"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: Upload Security Results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+  version:
+    name: Generate Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_tag: ${{ steps.version.outputs.version_tag }}
+      is_release: ${{ steps.version.outputs.is_release }}
+      release_id: ${{ steps.create_release.outputs.release_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v0
+        with:
+          versionSpec: "5.x"
+
+      - name: Calculate Version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v0
+        with:
+          useConfigFile: true
+          configFilePath: GitVersion.yml
+
+      - name: Generate Semantic Version
+        id: version
+        run: |
+          if [[ -n "${{ inputs.version_override }}" ]]; then
+            VERSION="${{ inputs.version_override }}"
+          else
+            if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+              VERSION="${{ steps.gitversion.outputs.semVer }}"
+            elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+              VERSION="${{ steps.gitversion.outputs.semVer }}-beta.${{ github.run_number }}"
+            elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              VERSION="${{ steps.gitversion.outputs.semVer }}-pr.${{ github.event.pull_request.number }}.${{ github.run_number }}"
+            else
+              VERSION="${{ steps.gitversion.outputs.semVer }}-build.${{ github.run_number }}"
+            fi
+          fi
+
+          VERSION=$(echo "$VERSION" | sed 's/\+.*//')
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "is_release=${{ github.ref == 'refs/heads/main' }}" >> $GITHUB_OUTPUT
+
+          echo "Version: $VERSION"
+
+      - name: Create Pre-Release
+        id: create_release
+        if: github.ref == 'refs/heads/main'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.version.outputs.version_tag }}
+          name: Golden Images ${{ steps.version.outputs.version }}
+          body: |
+            ## Release in Progress
+
+            Image builds are currently in progress. SBOM and artifacts will be uploaded once builds complete.
+
+            **Version**: `${{ steps.version.outputs.version }}`
+            **Commit**: `${{ github.sha }}`
+          prerelease: true
+          draft: false
+          allowUpdates: true
+
+  build-image:
+    name: Build ${{ matrix.name }}
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - image_os: ubuntu22
+            os_version: "22_04"
+            image_definition: "github-runner-ubuntu-2204"
+            name: "Ubuntu 22.04 LTS"
+            base_sku: "22_04-lts-gen2"
+            agent_spec: "ubuntu-22.04"
+          - image_os: ubuntu24
+            os_version: "24_04"
+            image_definition: "github-runner-ubuntu-2404"
+            name: "Ubuntu 24.04 LTS"
+            base_sku: "24_04-lts-gen2"
+            agent_spec: "ubuntu-24.04"
+    # if: |
+    #    inputs.image_os == 'all' ||
+    #    inputs.image_os == matrix.image_os ||
+    #    inputs.image_os == '' ||
+    #    github.event_name != 'workflow_dispatch'
+
+    env:
+      IMAGE_VERSION: ${{ needs.version.outputs.version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # - name: Azure Login with OIDC
+      #   uses: azure/login@v2
+      #   with:
+      #     client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      #     tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+      #     subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: ${{ env.PACKER_VERSION }}
+
+      - name: Cache Packer Plugins
+        uses: actions/cache@v4
+        with:
+          path: ~/.packer.d/plugins
+          key: ${{ runner.os }}-packer-${{ hashFiles('**/*.pkr.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-packer-
+
+      - name: Verify Packer installation
+        run: packer version
+
+      - name: Install Packer Azure Plugin
+        run: packer plugins install github.com/hashicorp/azure
+
+      - name: Initialize Packer
+        run: |
+          packer init ${{ env.TEMPLATE_PATH }}
+
+      - name: Format Packer
+        run: |
+          packer fmt -check ${{ env.TEMPLATE_PATH }} || packer fmt ${{ env.TEMPLATE_PATH }}
+
+      - name: Generate Build Metadata
+        id: metadata
+        run: |
+          BUILD_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          GIT_SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
+
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            ENVIRONMENT="production"
+            IMAGE_TIER="stable"
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            ENVIRONMENT="staging"
+            IMAGE_TIER="beta"
+          else
+            ENVIRONMENT="development"
+            IMAGE_TIER="alpha"
+          fi
+
+          echo "build_timestamp=$BUILD_TIMESTAMP" >> $GITHUB_OUTPUT
+          echo "git_short_sha=$GIT_SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
+          echo "image_tier=$IMAGE_TIER" >> $GITHUB_OUTPUT
+
+      - name: Validate Packer Template
+        run: |
+          packer validate \
+            # -only="${{ env.BUILD_NAME }}" \
+            -var="client_id=${{ secrets.AZURE_CLIENT_ID }}" \
+            -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -var="oidc_request_token=$ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            -var="oidc_request_url=$ACTIONS_ID_TOKEN_REQUEST_URL" \
+            -var="managed_image_name=${{ matrix.image_definition }}" \
+            -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
+            -var="image_os=${{ matrix.image_os }}" \
+            -var="build_resource_group_name=${{ secrets.BUILD_RG_NAME }}" \
+            -var="gallery_name=${{ env.GALLERY_NAME }}" \
+            -var="gallery_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
+            -var="gallery_image_name=${{ matrix.image_definition }}" \
+            -var="gallery_image_version=${{ env.IMAGE_VERSION }}" \
+            ${{ env.TEMPLATE_PATH }}
+
+      - name: Build Image with Packer
+        run: |
+          echo "Building ${{ matrix.image_definition }} (Ubuntu ${{ matrix.os_version }}) - Version ${{ env.IMAGE_VERSION }}"
+
+          packer build \
+            # -only="${{ env.BUILD_NAME }}" \
+            -var="client_id=${{ secrets.AZURE_CLIENT_ID }}" \
+            -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -var="oidc_request_token=$ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            -var="oidc_request_url=$ACTIONS_ID_TOKEN_REQUEST_URL" \
+            -var="managed_image_name=${{ matrix.image_definition }}" \
+            -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
+            -var="image_os=${{ matrix.image_os }}" \
+            -var="build_resource_group_name=${{ secrets.BUILD_RG_NAME }}" \
+            -var="gallery_name=${{ env.GALLERY_NAME }}" \
+            -var="gallery_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
+            -var="gallery_image_name=${{ matrix.image_definition }}" \
+            -var="gallery_image_version=${{ env.IMAGE_VERSION }}" \
+            ${{ env.TEMPLATE_PATH }}
+
+      - name: Upload Build Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ matrix.image_os }}-${{ env.IMAGE_VERSION }}
+          path: |
+            *.log
+            packer-manifest*.json
+          retention-days: 30
+
+      - name: Trigger SBOM Generation
+        if: success() && github.ref == 'refs/heads/main'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: generate-sbom
+          client-payload: |
+            {
+              "agentSpec": "${{ matrix.agent_spec }}",
+              "imageVersion": "${{ env.IMAGE_VERSION }}",
+              "ReleaseID": "${{ needs.version.outputs.release_id }}",
+              "imageOS": "${{ matrix.image_os }}"
+            }
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## Image Build Successful
+              
+              **${{ matrix.name }}** v${{ env.IMAGE_VERSION }}
+              
+              - **Image**: \`${{ matrix.image_definition }}\`
+              - **Environment**: \`${{ steps.metadata.outputs.environment }}\`
+              - **Tier**: \`${{ steps.metadata.outputs.image_tier }}\`
+              - **Commit**: \`${{ steps.metadata.outputs.git_short_sha }}\`
+              
+              SBOM generation will be triggered after merge to main.`
+            })
