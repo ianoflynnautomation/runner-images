@@ -9,7 +9,6 @@ permissions:
 
 jobs:
   build-image:
-    #runs-on: ubuntu-slim
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -17,10 +16,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # - image_os: ubuntu22
-          #   os_version: "22_04"
-          #   image_definition: "github-runner-ubuntu-2204"
-          #   base_sku: "22_04-lts-gen2"
+          - image_os: ubuntu22
+            os_version: "22_04"
+            image_definition: "github-runner-ubuntu-2204"
+            base_sku: "22_04-lts-gen2"
           - image_os: ubuntu24
             os_version: "24_04"
             image_definition: "github-runner-ubuntu-2404"

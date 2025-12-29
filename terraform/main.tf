@@ -79,73 +79,30 @@ module "compute_gallery" {
   enable_telemetry    = var.enable_telemetry
 
   shared_image_definitions = {
-    ubuntu2204_runner = {
-      name        = "github-runner-ubuntu-2204"
-      os_type     = "Linux"
-      description = "GitHub Actions Self-Hosted Runner - Ubuntu 22.04 LTS (Jammy Jellyfish) - Gen2 with Trusted Launch"
+    for key, cfg in local.runner_manifest : key => {
+      name        = "github-runner-${key}"
+      os_type     = cfg.os_type
+      description = "GitHub Actions Runner: ${cfg.os_type} ${cfg.version}"
+
       identifier = {
         publisher = var.publisher
         offer     = "GitHubActionsRunner"
-        sku       = "ubuntu-2204-lts-gen2"
+        sku       = cfg.sku
       }
-      end_of_life_date = "2027-04-30T00:00:00Z"
 
-      hyper_v_generation = "V1"
-      # trusted_launch_enabled              = true
-      accelerated_network_support_enabled = true
-      architecture                        = "x64"
-
+      end_of_life_date             = cfg.eol
+      hyper_v_generation           = "V1"
+      architecture                 = "x64"
       min_recommended_vcpu_count   = 2
-      max_recommended_vcpu_count   = 32
+      max_recommended_vcpu_count   = cfg.max_vcpu
       min_recommended_memory_in_gb = 8
-      max_recommended_memory_in_gb = 128
+      max_recommended_memory_in_gb = cfg.max_mem
 
-      tags = {
-        OS               = "Ubuntu"
-        OSVersion        = "22.04"
-        ImageType        = "GitHubActionsRunner"
-        HyperVGeneration = "V1"
-        SecurityProfile  = var.enable_trusted_launch ? "TrustedLaunch" : "Standard"
-        BuiltBy          = "Packer"
-        Compliance       = "CIS-Level1"
-        Owner            = "PlatformEngineering"
-        Environment      = "All"
-        ManagedBy        = "Terraform"
-      }
-    }
-    ubuntu_2404_runner = {
-      name        = "github-runner-ubuntu-2404"
-      os_type     = "Linux"
-      description = "GitHub Actions Self-Hosted Runner - Ubuntu 24.04 LTS (Noble Numbat) - Gen2 with Trusted Launch"
-      identifier = {
-        publisher = var.publisher
-        offer     = "GitHubActionsRunner"
-        sku       = "ubuntu-2404-lts-gen2"
-      }
-      end_of_life_date = "2029-05-31T00:00:00Z"
-
-      hyper_v_generation = "V1"
-      # trusted_launch_enabled              = true
-      accelerated_network_support_enabled = true
-      architecture                        = "x64"
-
-      min_recommended_vcpu_count   = 2
-      max_recommended_vcpu_count   = 64
-      min_recommended_memory_in_gb = 8
-      max_recommended_memory_in_gb = 256
-
-      tags = {
-        OS               = "Ubuntu"
-        OSVersion        = "24.04"
-        ImageType        = "GitHubActionsRunner"
-        HyperVGeneration = "V1"
-        SecurityProfile  = var.enable_trusted_launch ? "TrustedLaunch" : "Standard"
-        BuiltBy          = "Packer"
-        Compliance       = "CIS-Level1"
-        Owner            = "PlatformEngineering"
-        Environment      = "All"
-        ManagedBy        = "Terraform"
-      }
+      tags = merge(local.base_image_tags, {
+        OS              = cfg.os_type
+        OSVersion       = cfg.version
+        SecurityProfile = var.enable_trusted_launch ? "TrustedLaunch" : "Standard"
+      })
     }
   }
 
