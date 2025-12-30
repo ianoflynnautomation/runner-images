@@ -96,10 +96,11 @@ jobs:
     name: Generate Version
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      version_tag: ${{ steps.version.outputs.version_tag }}
-      is_release: ${{ steps.version.outputs.is_release }}
-      release_id: ${{ steps.create_release.outputs.release_id }}
+      version: ${{ steps.calver.outputs.version }}
+      version_tag: ${{ steps.calver.outputs.version_tag }}
+      is_release: ${{ steps.calver.outputs.is_release }}
+      build_date: ${{ steps.calver.outputs.build_date }}
+      image_age_days: ${{ steps.calver.outputs.image_age_days }}
 
     steps:
       - name: Checkout
@@ -107,56 +108,127 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install GitVersion
-        uses: gittools/actions/gitversion/setup@v3.1.11
-        with:
-          versionSpec: "6.0.5"
-
-      - name: Calculate Version
-        id: gitversion
-        uses: gittools/actions/gitversion/execute@v3.1.11
-        # with:
-        #   configFilePath: GitVersion.yml
-
-      - name: Generate Semantic Version
-        id: version
+      - name: Generate CalVer Version
+        id: calver
         run: |
+          # Get current date components
+          YEAR=$(date -u +"%Y")
+          MONTH=$(date -u +"%m")
+          DAY=$(date -u +"%d")
+          BUILD_DATE=$(date -u +"%Y-%m-%d")
+          
+          # Manual override
           if [[ -n "${{ inputs.version_override }}" ]]; then
             VERSION="${{ inputs.version_override }}"
+            echo "Using manual version override: $VERSION"
           else
+            # CalVer format: YYYY.MM.PATCH
+            # PATCH = number of builds today (or just day of month)
+            
             if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-              VERSION="${{ steps.gitversion.outputs.semVer }}"
+              # Production: YYYY.MM.DD (e.g., 2025.12.30)
+              VERSION="${YEAR}.${MONTH}.${DAY}"
+              ENV="production"
+              TIER="stable"
             elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
-              VERSION="${{ steps.gitversion.outputs.semVer }}-beta.${{ github.run_number }}"
+              # Staging: YYYY.MM.DD-beta.RUN (e.g., 2025.12.30-beta.5)
+              VERSION="${YEAR}.${MONTH}.${DAY}"
+              ENV="staging"
+              TIER="beta"
             elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-              VERSION="${{ steps.gitversion.outputs.semVer }}-pr.${{ github.event.pull_request.number }}.${{ github.run_number }}"
+              # PR: YYYY.MM.DD-pr.NUMBER.RUN (e.g., 2025.12.30-pr.42.1)
+              VERSION="${YEAR}.${MONTH}.${DAY}"
+              ENV="development"
+              TIER="pr"
             else
-              VERSION="${{ steps.gitversion.outputs.semVer }}-build.${{ github.run_number }}"
+              # Feature/other: YYYY.MM.DD-dev.RUN
+              VERSION="${YEAR}.${MONTH}.${DAY}"
+              ENV="development"
+              TIER="dev"
             fi
           fi
-
-          VERSION=$(echo "$VERSION" | sed 's/\+.*//')
-
+          
+          # Calculate image age (useful for compliance)
+          IMAGE_DATE=$(echo $VERSION | cut -d'-' -f1)
+          IMAGE_TIMESTAMP=$(date -d "$IMAGE_DATE" +%s 2>/dev/null || date -j -f "%Y.%m.%d" "$IMAGE_DATE" +%s)
+          CURRENT_TIMESTAMP=$(date +%s)
+          IMAGE_AGE_DAYS=$(( (CURRENT_TIMESTAMP - IMAGE_TIMESTAMP) / 86400 ))
+          
+          # Output
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "version_tag=v$VERSION" >> $GITHUB_OUTPUT
           echo "is_release=${{ github.ref == 'refs/heads/main' }}" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "image_age_days=$IMAGE_AGE_DAYS" >> $GITHUB_OUTPUT
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "tier=$TIER" >> $GITHUB_OUTPUT
+          
+          # Summary
+          cat << EOF >> $GITHUB_STEP_SUMMARY
+          ## CalVer Version Information
+          
+          - **Version**: \`$VERSION\`
+          - **Build Date**: \`$BUILD_DATE\`
+          - **Environment**: \`$ENV\`
+          - **Tier**: \`$TIER\`
+          - **Image Age**: \`$IMAGE_AGE_DAYS days\`
+          
+          ### Why CalVer?
+          Calendar versioning tells you instantly:
+          - When security patches were applied
+          - How old the image is (for compliance)
+          - Which monthly security baseline it includes
+          
+          > **2025 Best Practice**: Images are snapshots in time, not evolving software. 
+          > Date-based versions make more sense than semantic versions.
+          EOF
+          
+          echo "CalVer Version: $VERSION"
+          echo "Build Date: $BUILD_DATE"
+          echo "Environment: $ENV"
+          echo "Tier: $TIER"
 
-          echo "Version: $VERSION"
+      - name: Check Version Uniqueness
+        run: |
+          VERSION="${{ steps.calver.outputs.version }}"
+          
+          # Check if tag already exists
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Warning: Tag v$VERSION already exists"
+            echo "Tip: If rebuilding same day, use version_override input with a patch number"
+            echo "   Example: $VERSION.1, $VERSION.2, etc."
+          else
+            echo "Version $VERSION is unique"
+          fi
 
       - name: Create Pre-Release
         id: create_release
         if: github.ref == 'refs/heads/main'
         uses: ncipollo/release-action@v1
         with:
-          tag: ${{ steps.version.outputs.version_tag }}
-          name: Golden Images ${{ steps.version.outputs.version }}
+          tag: ${{ steps.calver.outputs.version_tag }}
+          name: Golden Images ${{ steps.calver.outputs.version }}
           body: |
             ## Release in Progress
-
-            Image builds are currently in progress. SBOM and artifacts will be uploaded once builds complete.
-
-            **Version**: `${{ steps.version.outputs.version }}`
+            
+            **CalVer Version**: `${{ steps.calver.outputs.version }}`
+            **Build Date**: `${{ steps.calver.outputs.build_date }}`
             **Commit**: `${{ github.sha }}`
+            
+            ---
+            
+            ###  Building
+            
+            - Ubuntu 22.04 LTS
+            - Ubuntu 24.04 LTS
+            
+            ### Next Steps
+            
+            1. Image builds in progress
+            2. SBOM generation
+            3. Final release update
+            
+            > **Note**: This is a pre-release. Will be updated when builds complete.
           prerelease: true
           draft: false
           allowUpdates: true
@@ -192,6 +264,7 @@ jobs:
 
     env:
       IMAGE_VERSION: ${{ needs.version.outputs.version }}
+      BUILD_DATE: ${{ needs.version.outputs.build_date }}
 
     steps:
       - name: Checkout repository
@@ -236,7 +309,8 @@ jobs:
         run: |
           BUILD_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           GIT_SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
-
+          
+          # Determine environment and tier
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             ENVIRONMENT="production"
             IMAGE_TIER="stable"
@@ -247,11 +321,31 @@ jobs:
             ENVIRONMENT="development"
             IMAGE_TIER="alpha"
           fi
-
+          
+          # Image naming with CalVer
+          IMAGE_NAME="${{ matrix.image_definition }}-${{ env.IMAGE_VERSION }}"
+          
           echo "build_timestamp=$BUILD_TIMESTAMP" >> $GITHUB_OUTPUT
           echo "git_short_sha=$GIT_SHORT_SHA" >> $GITHUB_OUTPUT
           echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
           echo "image_tier=$IMAGE_TIER" >> $GITHUB_OUTPUT
+          echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
+          
+          # Display info
+          cat << EOF >> $GITHUB_STEP_SUMMARY
+          ### Build Configuration
+          
+          | Property | Value |
+          |----------|-------|
+          | **Image** | ${{ matrix.name }} |
+          | **CalVer** | \`${{ env.IMAGE_VERSION }}\` |
+          | **Build Date** | \`${{ env.BUILD_DATE }}\` |
+          | **Environment** | \`$ENVIRONMENT\` |
+          | **Tier** | \`$IMAGE_TIER\` |
+          | **Commit** | \`$GIT_SHORT_SHA\` |
+          | **Age** | \`${{ needs.version.outputs.image_age_days }} days old\` |
+          EOF
+         
 
       - name: Validate Packer Template
         run: |
