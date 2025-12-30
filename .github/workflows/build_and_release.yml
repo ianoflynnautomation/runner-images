@@ -65,7 +65,6 @@ jobs:
           filters: |
             json: '**.json'
             sh: '**.sh'
-            markdown: '**.md'
 
       - name: Shebang Check
         if: steps.filter.outputs.sh == 'true'
