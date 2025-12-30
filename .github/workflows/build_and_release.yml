@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -105,147 +105,41 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Generate CalVer Version
+      - name: Generate Calender Version
         id: calver
+        shell: pwsh
         run: |
-          set -euo pipefail
-
-          # Always use GNU date syntax (ubuntu-latest has it)
-          YEAR=$(date -u +%Y)
-          MONTH=$(date -u +%m)
-          DAY=$(date -u +%d)
-          BUILD_DATE=$(date -u +%Y-%m-%d)
-
-          BASE_VERSION="${YEAR}.${MONTH}.${DAY}"
-
-          # ────────────────────────────────
-          #  Determine suffix / modifier
-          # ────────────────────────────────
-          SUFFIX=""
-          TIER="dev"
-          ENV="development"
-
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            TIER="stable"
-            ENV="production"
-          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
-            TIER="beta"
-            ENV="staging"
-            SUFFIX="-beta"
-          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            TIER="pr"
-            ENV="development"
-            SUFFIX="-pr.${{ github.event.number }}"
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # Manual trigger → allow override or use build number
-            if [[ -n "${{ inputs.version_override }}" ]]; then
-              FULL_VERSION="${{ inputs.version_override }}"
-              echo "Using manual override → ${FULL_VERSION}"
-            fi
-          fi
-
-          # Manual override has highest priority
-          if [[ -n "${{ inputs.version_override }}" && -z "${FULL_VERSION:-}" ]]; then
-            FULL_VERSION="${{ inputs.version_override }}"
-          fi
-
-          # If no override → append build counter / suffix
-          if [[ -z "${FULL_VERSION:-}" ]]; then
-            # Count how many tags already exist today (simple counter)
-            # Adjust prefix depending on tier
-            PREFIX="${BASE_VERSION}${SUFFIX}"
-
-            EXISTING=$(git tag --list "${PREFIX}*" --sort=version:refname | wc -l | xargs)
-
-            if [[ $EXISTING -gt 0 ]]; then
-              PATCH=$((EXISTING + 1))
-              FULL_VERSION="${BASE_VERSION}${SUFFIX}.${PATCH}"
-            else
-              FULL_VERSION="${BASE_VERSION}${SUFFIX}"
-            fi
-          fi
-
-          # For Azure Gallery we prefer clean semver-like → replace - with .
-          GALLERY_VERSION="${FULL_VERSION//-/.}"
-
-          # ─── Age calculation ──────────────────────────────────────
-          # Use only YYYY.MM.DD part for age
-          IMAGE_DATE_PART=$(echo "$FULL_VERSION" | grep -o '^[0-9]\{4\}\.[0-9]\{2\}\.[0-9]\{2\}')
-          IMAGE_TIMESTAMP=$(date -d "${IMAGE_DATE_PART//./-}" +%s) || {
-            echo "Failed to parse date ${IMAGE_DATE_PART}" >&2
-            exit 1
-          }
-          CURRENT_TIMESTAMP=$(date +%s)
-          AGE_DAYS=$(( (CURRENT_TIMESTAMP - IMAGE_TIMESTAMP) / 86400 + 1 ))   # +1 = same day → 1 day
-
-          # ─── Outputs ──────────────────────────────────────────────
-          echo "version=$FULL_VERSION"               >> "$GITHUB_OUTPUT"
-          echo "version_tag=v$FULL_VERSION"          >> "$GITHUB_OUTPUT"
-          echo "gallery_version=$GALLERY_VERSION"    >> "$GITHUB_OUTPUT"
-          echo "is_release=$([[ $TIER == "stable" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "build_date=$BUILD_DATE"              >> "$GITHUB_OUTPUT"
-          echo "image_age_days=$AGE_DAYS"            >> "$GITHUB_OUTPUT"
-          echo "environment=$ENV"                    >> "$GITHUB_OUTPUT"
-          echo "tier=$TIER"                          >> "$GITHUB_OUTPUT"
-
-          # Nice summary
-          {
-            echo "## CalVer Version (modern 2025 style)"
-            echo
-            echo "- **Version**: \`$FULL_VERSION\`"
-            echo "- **Gallery-safe version**: \`$GALLERY_VERSION\`"
-            echo "- **Build Date**: \`$BUILD_DATE\`"
-            echo "- **Environment/Tier**: \`$ENV\` / \`$TIER\`"
-            echo "- **Image Age**: ≈ $AGE_DAYS days"
-            echo
-            echo "> Images are time-based snapshots → CalVer = instant age & patch-level awareness"
-          } >> "$GITHUB_STEP_SUMMARY"
+          ./helpers/GetCalenderVersion.ps1 `
+            -VersionOverride "${{ inputs.version_override }}"
 
       - name: Check Version Uniqueness
+        shell: pwsh
         run: |
-          VERSION="${{ steps.calver.outputs.version }}"
-          
-          # Check if tag already exists
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Warning: Tag v$VERSION already exists"
-            echo "Tip: If rebuilding same day, use version_override input with a patch number"
-            echo "   Example: $VERSION.1, $VERSION.2, etc."
-          else
-            echo "Version $VERSION is unique"
-          fi
+          $version = "${{ steps.calver.outputs.version }}"
+          $tag = "v$version"
+          if (git rev-parse $tag 2>$null) {
+            Write-Host "::warning::Tag $tag already exists - consider using version_override"
+          } else {
+            Write-Host "Tag $tag is unique"
 
-      - name: Create Pre-Release
-        id: create_release
+      - name: Create Release Placeholder
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.calver.outputs.version_tag }}
-          name: Golden Images ${{ steps.calver.outputs.version }}
+          name: Runner Image ${{ steps.calver.outputs.version }}
           body: |
-            ## Release in Progress
-            
-            **CalVer Version**: `${{ steps.calver.outputs.version }}`
-            **Build Date**: `${{ steps.calver.outputs.build_date }}`
-            **Commit**: `${{ github.sha }}`
-            
-            ---
-            
-            ###  Building
-            
-            - Ubuntu 22.04 LTS
-            - Ubuntu 24.04 LTS
-            
-            ### Next Steps
-            
-            1. Image builds in progress
-            2. SBOM generation
-            3. Final release update
-            
-            > **Note**: This is a pre-release. Will be updated when builds complete.
+            ## Image Build in Progress
+
+            **CalVer** : `${{ steps.calver.outputs.version }}`
+            **Date**   : `${{ steps.calver.outputs.build_date }}`
+            **Commit** : `${{ github.sha }}`
+
+            > Date-based versioning → instant age & patch-level awareness
           prerelease: true
           draft: false
           generate_release_notes: false
@@ -286,7 +180,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # - name: Azure Login with OIDC
       #   uses: azure/login@v2
@@ -324,46 +218,9 @@ jobs:
 
       - name: Generate Build Metadata
         id: metadata
+        shell: pwsh
         run: |
-          BUILD_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          GIT_SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
-          
-          # Determine environment and tier
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            ENVIRONMENT="production"
-            IMAGE_TIER="stable"
-          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
-            ENVIRONMENT="staging"
-            IMAGE_TIER="beta"
-          else
-            ENVIRONMENT="development"
-            IMAGE_TIER="alpha"
-          fi
-          
-          # Image naming with CalVer
-          IMAGE_NAME="${{ matrix.image_definition }}-${{ env.IMAGE_VERSION }}"
-          
-          echo "build_timestamp=$BUILD_TIMESTAMP" >> $GITHUB_OUTPUT
-          echo "git_short_sha=$GIT_SHORT_SHA" >> $GITHUB_OUTPUT
-          echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
-          echo "image_tier=$IMAGE_TIER" >> $GITHUB_OUTPUT
-          echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
-          
-          # Display info
-          cat << EOF >> $GITHUB_STEP_SUMMARY
-          ### Build Configuration
-          
-          | Property | Value |
-          |----------|-------|
-          | **Image** | ${{ matrix.name }} |
-          | **CalVer** | \`${{ env.IMAGE_VERSION }}\` |
-          | **Build Date** | \`${{ env.BUILD_DATE }}\` |
-          | **Environment** | \`$ENVIRONMENT\` |
-          | **Tier** | \`$IMAGE_TIER\` |
-          | **Commit** | \`$GIT_SHORT_SHA\` |
-          | **Age** | \`${{ needs.version.outputs.image_age_days }} days old\` |
-          EOF
-         
+          ./helpers/Get-BuildMetadata.ps1
 
       - name: Validate Packer Template
         run: |
