@@ -50,23 +50,29 @@ $imageDateStr = $datePart -replace '\.', '-'
 $imageDate = [datetime]::ParseExact($imageDateStr, 'yyyy-MM-dd', $null)
 $ageDays = [math]::Round(((Get-Date) - $imageDate).TotalDays) + 1
 
-@{
-    version         = $version
-    version_tag     = "v$version"
-    gallery_version = $galleryVersion
-    build_date      = $buildDate
-    image_age_days  = $ageDays
-    is_beta         = ($suffix -eq "-beta").ToString().ToLower()
-} | ConvertTo-Json -Compress | Out-File -FilePath env:GITHUB_OUTPUT -Append -Encoding utf8
+$outputs = @(
+    "version=$version"
+    "version_tag=v$version"
+    "gallery_version=$galleryVersion"
+    "build_date=$buildDate"
+    "image_age_days=$ageDays"
+    "is_beta=$($suffix -eq '-beta')".ToLower()
+)
 
-@"
+$outputs | ForEach-Object {
+    $_ | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+}
+
+$summary = @"
 ## Runner Image Version (CalVer)
 
 - **Version**         : ``$version``
 - **Gallery version** : ``$galleryVersion``
 - **Build date**      : ``$buildDate``
-- **Type**            : $(if ($suffix) { "preview/beta" } else { "stable" })
+- **Type**            : $(if ($suffix) { 'preview/beta' } else { 'stable' })
 - **Age**             : ≈ $ageDays days
-"@ | Out-File -FilePath env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+"@
 
-Write-Host "Version generated: $version"
+$summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+Write-Host "Version generated: $version (gallery: $galleryVersion)"
