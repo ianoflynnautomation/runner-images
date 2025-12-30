@@ -54,29 +54,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Validate JSON Schema
-        shell: pwsh
-        run: ./helpers/CheckJsonSchema.ps1
+      - name: Detect Changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            json: '**.json'
+            sh: '**.sh'
+            markdown: '**.md'
 
-      - name: Lint Code
-        uses: github/super-linter/slim@v7
-        env:
-          VALIDATE_ALL_CODEBASE: false
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VALIDATE_JSON: true
-          VALIDATE_MARKDOWN: true
-          VALIDATE_BASH: true
-          VALIDATE_POWERSHELL: true
-          DEFAULT_BRANCH: main
-          FILTER_REGEX_EXCLUDE: .*images/.*-Readme.md
+      - name: Shebang Check
+        if: steps.filter.outputs.sh == 'true'
+        uses: ./.github/actions/lint-shebang
 
-      - name: Check Shebang Lines
-        run: ./images.CI/shebang-linter.ps1
-        shell: pwsh
+      - name: Schema Check
+        if: steps.filter.outputs.json == 'true'
+        uses: ./.github/actions/validate-json-schema
+
+      - name: Lint Code Base
+        uses: ./.github/actions/lint
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Security Scan
         uses: aquasecurity/trivy-action@master
