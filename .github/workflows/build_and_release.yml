@@ -110,7 +110,7 @@ jobs:
       - name: Install GitVersion
         uses: gittools/actions/gitversion/setup@v4.2.0
         with:
-          versionSpec: "6.0.0"
+          versionSpec: "6.4.x"
 
       - name: Calculate Version
         id: gitversion
