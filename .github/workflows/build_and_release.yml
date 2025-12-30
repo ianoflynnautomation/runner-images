@@ -221,9 +221,9 @@ jobs:
       - name: Create Pre-Release
         id: create_release
         if: github.ref == 'refs/heads/main'
-        uses: ncipollo/release-action@v1
+        uses: softprops/action-gh-release@v2
         with:
-          tag: ${{ steps.calver.outputs.version_tag }}
+          tag_name: ${{ steps.calver.outputs.version_tag }}
           name: Golden Images ${{ steps.calver.outputs.version }}
           body: |
             ## Release in Progress
@@ -248,7 +248,8 @@ jobs:
             > **Note**: This is a pre-release. Will be updated when builds complete.
           prerelease: true
           draft: false
-          allowUpdates: true
+          generate_release_notes: false
+          make_latest: legacy
 
   build-image:
     name: Build ${{ matrix.name }}
