@@ -125,6 +125,7 @@ jobs:
             Write-Host "::warning::Tag $tag already exists - consider using version_override"
           } else {
             Write-Host "Tag $tag is unique"
+          }
 
       - name: Create Release Placeholder
         if: github.ref == 'refs/heads/main'

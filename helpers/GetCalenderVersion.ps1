@@ -1,4 +1,3 @@
-
 [CmdletBinding()]
 param (
     [Parameter()]
@@ -16,7 +15,6 @@ $buildDate = $date.ToString("yyyy-MM-dd")
 $base = "$year.$month.$day"
 $suffix = ""
 
-# Optional beta suffix only from develop branch
 if ($env:GITHUB_REF -eq 'refs/heads/develop') {
     $suffix = "-beta"
 }
@@ -45,11 +43,20 @@ else {
 
 $galleryVersion = $version -replace '-', '.'
 
-$datePart = [regex]::Match($version, '^\d{4}\.\d{2}\.\d{2}').Value
+$datePartMatch = [regex]::Match($version, '^\d{4}\.\d{2}\.\d{2}')
+$datePart = if ($datePartMatch.Success) { $datePartMatch.Value } else { $base }
 $imageDateStr = $datePart -replace '\.', '-'
-$imageDate = [datetime]::ParseExact($imageDateStr, 'yyyy-MM-dd', $null)
-$ageDays = [math]::Round(((Get-Date) - $imageDate).TotalDays) + 1
 
+try {
+    $imageDate = [datetime]::ParseExact($imageDateStr, 'yyyy-MM-dd', [cultureinfo]::InvariantCulture)
+    $ageDays = [math]::Round(((Get-Date) - $imageDate).TotalDays) + 1
+}
+catch {
+    Write-Host "::warning::Date parsing failed for age: $imageDateStr"
+    $ageDays = 1
+}
+
+# --- Write outputs ---
 $outputs = @(
     "version=$version"
     "version_tag=v$version"
@@ -63,7 +70,8 @@ $outputs | ForEach-Object {
     $_ | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 }
 
-$summary = @"
+# --- Write step summary ---
+@"
 ## Runner Image Version (CalVer)
 
 - **Version**         : ``$version``
@@ -71,8 +79,6 @@ $summary = @"
 - **Build date**      : ``$buildDate``
 - **Type**            : $(if ($suffix) { 'preview/beta' } else { 'stable' })
 - **Age**             : ≈ $ageDays days
-"@
+"@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
-$summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-
-Write-Host "Version generated: $version (gallery: $galleryVersion)"
+Write-Host "Generated CalVer: $version (gallery: $galleryVersion)"
