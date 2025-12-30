@@ -101,6 +101,7 @@ jobs:
       is_release: ${{ steps.calver.outputs.is_release }}
       build_date: ${{ steps.calver.outputs.build_date }}
       image_age_days: ${{ steps.calver.outputs.image_age_days }}
+      gallery_version: ${{ steps.calver.outputs.gallery_version }}
 
     steps:
       - name: Checkout
@@ -111,82 +112,98 @@ jobs:
       - name: Generate CalVer Version
         id: calver
         run: |
-          # Get current date components
-          YEAR=$(date -u +"%Y")
-          MONTH=$(date -u +"%m")
-          DAY=$(date -u +"%d")
-          BUILD_DATE=$(date -u +"%Y-%m-%d")
-          
-          # Manual override
-          if [[ -n "${{ inputs.version_override }}" ]]; then
-            VERSION="${{ inputs.version_override }}"
-            echo "Using manual version override: $VERSION"
-          else
-            # CalVer format: YYYY.MM.PATCH
-            # PATCH = number of builds today (or just day of month)
-            
-            if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-              # Production: YYYY.MM.DD (e.g., 2025.12.30)
-              VERSION="${YEAR}.${MONTH}.${DAY}"
-              ENV="production"
-              TIER="stable"
-            elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
-              # Staging: YYYY.MM.DD-beta.RUN (e.g., 2025.12.30-beta.5)
-              VERSION="${YEAR}.${MONTH}.${DAY}"
-              ENV="staging"
-              TIER="beta"
-            elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-              # PR: YYYY.MM.DD-pr.NUMBER.RUN (e.g., 2025.12.30-pr.42.1)
-              VERSION="${YEAR}.${MONTH}.${DAY}"
-              ENV="development"
-              TIER="pr"
-            else
-              # Feature/other: YYYY.MM.DD-dev.RUN
-              VERSION="${YEAR}.${MONTH}.${DAY}"
-              ENV="development"
-              TIER="dev"
+          set -euo pipefail
+
+          # Always use GNU date syntax (ubuntu-latest has it)
+          YEAR=$(date -u +%Y)
+          MONTH=$(date -u +%m)
+          DAY=$(date -u +%d)
+          BUILD_DATE=$(date -u +%Y-%m-%d)
+
+          BASE_VERSION="${YEAR}.${MONTH}.${DAY}"
+
+          # ────────────────────────────────
+          #  Determine suffix / modifier
+          # ────────────────────────────────
+          SUFFIX=""
+          TIER="dev"
+          ENV="development"
+
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            TIER="stable"
+            ENV="production"
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            TIER="beta"
+            ENV="staging"
+            SUFFIX="-beta"
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            TIER="pr"
+            ENV="development"
+            SUFFIX="-pr.${{ github.event.number }}"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # Manual trigger → allow override or use build number
+            if [[ -n "${{ inputs.version_override }}" ]]; then
+              FULL_VERSION="${{ inputs.version_override }}"
+              echo "Using manual override → ${FULL_VERSION}"
             fi
           fi
-          
-          # Calculate image age (useful for compliance)
-          IMAGE_DATE=$(echo $VERSION | cut -d'-' -f1)
-          IMAGE_TIMESTAMP=$(date -d "$IMAGE_DATE" +%s 2>/dev/null || date -j -f "%Y.%m.%d" "$IMAGE_DATE" +%s)
+
+          # Manual override has highest priority
+          if [[ -n "${{ inputs.version_override }}" && -z "${FULL_VERSION:-}" ]]; then
+            FULL_VERSION="${{ inputs.version_override }}"
+          fi
+
+          # If no override → append build counter / suffix
+          if [[ -z "${FULL_VERSION:-}" ]]; then
+            # Count how many tags already exist today (simple counter)
+            # Adjust prefix depending on tier
+            PREFIX="${BASE_VERSION}${SUFFIX}"
+
+            EXISTING=$(git tag --list "${PREFIX}*" --sort=version:refname | wc -l | xargs)
+
+            if [[ $EXISTING -gt 0 ]]; then
+              PATCH=$((EXISTING + 1))
+              FULL_VERSION="${BASE_VERSION}${SUFFIX}.${PATCH}"
+            else
+              FULL_VERSION="${BASE_VERSION}${SUFFIX}"
+            fi
+          fi
+
+          # For Azure Gallery we prefer clean semver-like → replace - with .
+          GALLERY_VERSION="${FULL_VERSION//-/.}"
+
+          # ─── Age calculation ──────────────────────────────────────
+          # Use only YYYY.MM.DD part for age
+          IMAGE_DATE_PART=$(echo "$FULL_VERSION" | grep -o '^[0-9]\{4\}\.[0-9]\{2\}\.[0-9]\{2\}')
+          IMAGE_TIMESTAMP=$(date -d "${IMAGE_DATE_PART//./-}" +%s) || {
+            echo "Failed to parse date ${IMAGE_DATE_PART}" >&2
+            exit 1
+          }
           CURRENT_TIMESTAMP=$(date +%s)
-          IMAGE_AGE_DAYS=$(( (CURRENT_TIMESTAMP - IMAGE_TIMESTAMP) / 86400 ))
-          
-          # Output
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "version_tag=v$VERSION" >> $GITHUB_OUTPUT
-          echo "is_release=${{ github.ref == 'refs/heads/main' }}" >> $GITHUB_OUTPUT
-          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
-          echo "image_age_days=$IMAGE_AGE_DAYS" >> $GITHUB_OUTPUT
-          echo "environment=$ENV" >> $GITHUB_OUTPUT
-          echo "tier=$TIER" >> $GITHUB_OUTPUT
-          
-          # Summary
-          cat << EOF >> $GITHUB_STEP_SUMMARY
-          ## CalVer Version Information
-          
-          - **Version**: \`$VERSION\`
-          - **Build Date**: \`$BUILD_DATE\`
-          - **Environment**: \`$ENV\`
-          - **Tier**: \`$TIER\`
-          - **Image Age**: \`$IMAGE_AGE_DAYS days\`
-          
-          ### Why CalVer?
-          Calendar versioning tells you instantly:
-          - When security patches were applied
-          - How old the image is (for compliance)
-          - Which monthly security baseline it includes
-          
-          > **2025 Best Practice**: Images are snapshots in time, not evolving software. 
-          > Date-based versions make more sense than semantic versions.
-          EOF
-          
-          echo "CalVer Version: $VERSION"
-          echo "Build Date: $BUILD_DATE"
-          echo "Environment: $ENV"
-          echo "Tier: $TIER"
+          AGE_DAYS=$(( (CURRENT_TIMESTAMP - IMAGE_TIMESTAMP) / 86400 + 1 ))   # +1 = same day → 1 day
+
+          # ─── Outputs ──────────────────────────────────────────────
+          echo "version=$FULL_VERSION"               >> "$GITHUB_OUTPUT"
+          echo "version_tag=v$FULL_VERSION"          >> "$GITHUB_OUTPUT"
+          echo "gallery_version=$GALLERY_VERSION"    >> "$GITHUB_OUTPUT"
+          echo "is_release=$([[ $TIER == "stable" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "build_date=$BUILD_DATE"              >> "$GITHUB_OUTPUT"
+          echo "image_age_days=$AGE_DAYS"            >> "$GITHUB_OUTPUT"
+          echo "environment=$ENV"                    >> "$GITHUB_OUTPUT"
+          echo "tier=$TIER"                          >> "$GITHUB_OUTPUT"
+
+          # Nice summary
+          {
+            echo "## CalVer Version (modern 2025 style)"
+            echo
+            echo "- **Version**: \`$FULL_VERSION\`"
+            echo "- **Gallery-safe version**: \`$GALLERY_VERSION\`"
+            echo "- **Build Date**: \`$BUILD_DATE\`"
+            echo "- **Environment/Tier**: \`$ENV\` / \`$TIER\`"
+            echo "- **Image Age**: ≈ $AGE_DAYS days"
+            echo
+            echo "> Images are time-based snapshots → CalVer = instant age & patch-level awareness"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check Version Uniqueness
         run: |
@@ -363,7 +380,7 @@ jobs:
             -var="gallery_name=${{ env.GALLERY_NAME }}" \
             -var="gallery_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
             -var="gallery_image_name=${{ matrix.image_definition }}" \
-            -var="gallery_image_version=${{ env.IMAGE_VERSION }}" \
+            -var="gallery_image_version=${{ needs.version.outputs.gallery_version }}" \
             ${{ env.TEMPLATE_PATH }}
 
       - name: Build Image with Packer
@@ -384,7 +401,7 @@ jobs:
             -var="gallery_name=${{ env.GALLERY_NAME }}" \
             -var="gallery_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
             -var="gallery_image_name=${{ matrix.image_definition }}" \
-            -var="gallery_image_version=${{ env.IMAGE_VERSION }}" \
+            -var="gallery_image_version=${{ needs.version.outputs.gallery_version }}" \
             ${{ env.TEMPLATE_PATH }}
 
       - name: Upload Build Artifacts
