@@ -32,6 +32,7 @@ from the ACTIONS_ID_TOKEN_REQUEST_TOKEN variable. Refer to "Configure a federate
 credential on an app" for details on how to setup GitHub Actions OIDC authentication.
 DESCRIPTION
   default = ""
+  sensitive   = true
 }
 
 variable "oidc_request_url" {
@@ -46,6 +47,7 @@ DESCRIPTION
 
 variable "subscription_id" {
   type    = string
+  description = "Azure subscription ID"
   default = "${env("ARM_SUBSCRIPTION_ID")}"
 }
 
@@ -75,6 +77,7 @@ If provided, an Azure Network Security Group will be created with corresponding 
 Providing allowed_inbound_ip_addresses in combination with virtual_network_name is not allowed.
 DESCRIPTION
   default = []
+
 }
 
 variable "azure_tags" {
@@ -105,6 +108,11 @@ There may be a difference in versions available across regions due to image sync
 To ensure a consistent version across regions set this value to one that is available in all regions where you are deploying.
 DESCRIPTION
   default = "${env("GALLERY_IMAGE_VERSION")}"
+
+  validation {
+    condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.gallery_image_version))
+    error_message = "Gallery image version must follow X.Y.Z format (e.g., 2025.01.15)"
+  }
 }
 
 variable "gallery_name" {
@@ -123,8 +131,14 @@ variable "gallery_storage_account_type" {
 }
 
 variable "image_os_type" {
-  type    = string
-  default = "Linux"
+  type        = string
+  description = "OS type for Azure image"
+  default     = "Linux"
+
+  validation {
+    condition     = contains(["Linux", "Windows"], var.image_os_type)
+    error_message = "Image OS type must be 'Linux' or 'Windows'"
+  }
 }
 
 variable "location" {
@@ -159,9 +173,9 @@ variable "managed_image_storage_account_type" {
   description = "Specify the storage account type for a managed image. Valid values are Standard_LRS and Premium_LRS. The default is Standard_LRS."
   default = "Premium_LRS"
 
-validation {
-    condition = contains(["Standard_LRS", "Premium_LRS"],var.managed_image_storage_account_type)
-    error_message = "Invalid storage account type for managed image. Allowed values are: \"Standard_LRS\", \"Premium_LRS\"."
+ validation {
+    condition     = contains(["Standard_LRS", "Premium_LRS", "Standard_ZRS"], var.gallery_storage_account_type)
+    error_message = "Gallery storage must be 'Standard_LRS', 'Premium_LRS', or 'Standard_ZRS'"
   }
 }
 
@@ -177,7 +191,12 @@ DESCRIPTION
 variable "os_disk_size_gb" {
   type    = number
   description = "Specify the size of the OS disk in GB (gigabytes). Values of zero or less than zero are ignored."
-  default = null
+   default     = null
+
+  validation {
+    condition     = var.os_disk_size_gb == null || (var.os_disk_size_gb >= 30 && var.os_disk_size_gb <= 2048)
+    error_message = "OS disk size must be between 30 GB and 2048 GB"
+  }
 }
 
 variable "source_image_version" {
@@ -247,27 +266,38 @@ variable "winrm_username" {
 
 variable "dockerhub_login" {
   type    = string
+  description = "Docker Hub username for authenticated pulls"
   default = "${env("DOCKERHUB_LOGIN")}"
 }
 
 variable "dockerhub_password" {
   type    = string
+  description = "Docker Hub password or token"
   default = "${env("DOCKERHUB_PASSWORD")}"
+  sensitive   = true
 }
 
 variable "helper_script_folder" {
   type    = string
+  description = "Path to helper scripts on the image"
   default = "/imagegeneration/helpers"
 }
 
 variable "image_folder" {
   type    = string
+  description = "Root folder for image generation files"
   default = "/imagegeneration"
 }
 
 variable "image_os" {
-  type    = string
-  default = ""
+  type        = string
+  description = "Operating system to build (ubuntu22, ubuntu24)"
+  default     = ""
+
+  validation {
+    condition     = contains(["ubuntu22", "ubuntu24"], var.image_os)
+    error_message = "Image OS must be one of: ubuntu22, ubuntu24"
+  }
 }
 
 variable "image_version" {
@@ -308,6 +338,16 @@ variable "spot_instance" {
     max_price    = 0.20
     eviction_policy = "Delete"
   }
+
+  validation {
+    condition     = !var.spot_instance.enabled || contains(["Deallocate", "Delete"], var.spot_instance.eviction_policy)
+    error_message = "Spot eviction policy must be 'Deallocate' or 'Delete'"
+  }
+
+  validation {
+    condition     = !var.spot_instance.enabled || var.spot_instance.max_price == -1 || var.spot_instance.max_price > 0
+    error_message = "Spot max_price must be -1 (Azure pricing) or > 0"
+  }
 }
 
 variable "shared_image_gallery_timeout" {
@@ -319,6 +359,11 @@ Error: context deadline exceeded, but the image is present when you check your A
 then you probably need to increase this timeout from its default of "60m" (valid time units include s for seconds, m for minutes, and h for hours.)
 DESCRIPTION
   default =  "60m"
+
+    validation {
+    condition     = can(regex("^\\d+[smh]$", var.shared_image_gallery_timeout))
+    error_message = "Timeout must be a valid duration (e.g., '60m', '90m', '2h')"
+  }
 }
 
 variable "shared_gallery_image_version_end_of_life_date" {
@@ -331,6 +376,11 @@ variable "shared_gallery_image_version_replica_count" {
   type    = number
   description = "The number of replicas of the Image Version to be created per region defined in replication_regions. Users using target_region blocks can specify individual replica counts per region using the replicas field."
   default = 1
+
+    validation {
+    condition     = var.shared_gallery_image_version_replica_count >= 1 && var.shared_gallery_image_version_replica_count <= 100
+    error_message = "Replica count must be between 1 and 100"
+  }
 }
 
 variable "shared_gallery_image_version_exclude_from_latest" {
