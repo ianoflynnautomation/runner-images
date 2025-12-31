@@ -1,82 +1,157 @@
 [CmdletBinding()]
-param (
+param(
     [Parameter()]
+    [ValidateNotNullOrEmpty()]
     [string]$VersionOverride
 )
 
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$date = Get-Date
-$year   = $date.ToString("yyyy")
-$month  = $date.ToString("MM")
-$day    = $date.ToString("dd")
-$buildDate = $date.ToString("yyyy-MM-dd")
+function Get-CalVerBase {
+    <#
+    .SYNOPSIS
+        Returns yyyy.MM.dd string based on current UTC date
+    #>
+    [OutputType([string])]
+    param()
 
-$base = "$year.$month.$day"
-$suffix = ""
-
-if ($env:GITHUB_REF -eq 'refs/heads/develop') {
-    $suffix = "-beta"
+    $now = [datetime]::UtcNow
+    return $now.ToString('yyyy.MM.dd')
 }
 
-$version = $null
+function Get-BuildDateString {
+    [OutputType([string])]
+    param()
 
-if ($VersionOverride) {
-    $version = $VersionOverride
-    Write-Host "Using override: $version"
+    return [datetime]::UtcNow.ToString('yyyy-MM-dd')
 }
-else {
+
+function Get-VersionSuffix {
+    [OutputType([string])]
+    param()
+
+    if ($env:GITHUB_REF -eq 'refs/heads/develop') {
+        return '-beta'
+    }
+    return ''
+}
+
+function Get-NextPatchNumber {
+    [OutputType([int])]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Prefix
+    )
+
     git fetch --tags --quiet 2>$null
 
-    $prefix = "$base$suffix"
-    $existing = git tag --list "$prefix*" --sort=version:refname
-    $count = if ($existing) { ($existing -split '\n').Count } else { 0 }
-
-    if ($count -gt 0) {
-        $patch = $count + 1
-        $version = "$base$suffix.$patch"
+    $existingTags = git tag --list "$Prefix*" --sort=version:refname
+    if (-not $existingTags) {
+        return 0
     }
-    else {
-        $version = "$base$suffix"
+
+    # Count non-empty lines
+    return ($existingTags -split '\n' | Where-Object { $_ }).Count
+}
+
+function Resolve-FinalVersion {
+    [OutputType([string])]
+    param(
+        [string]$Override,
+        [string]$Base,
+        [string]$Suffix
+    )
+
+    if ($Override) {
+        Write-Host "Using version override: $Override"
+        return $Override
+    }
+
+    $prefix = "$Base$Suffix"
+
+    $patch = Get-NextPatchNumber -Prefix $prefix
+
+    if ($patch -eq 0) {
+        return $prefix
+    }
+
+    return "$prefix.$patch"
+}
+
+function ConvertTo-GalleryVersion {
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)]
+        [string]$SemverVersion
+    )
+
+    return $SemverVersion -replace '-', '.'
+}
+
+function Get-ImageAgeInDays {
+    [OutputType([int])]
+    param(
+        [string]$Version
+    )
+
+    if (-not ($Version -match '^(\d{4})\.(\d{2})\.(\d{2})')) {
+        Write-Host "::warning::Cannot parse date from version '$Version'"
+        return 1
+    }
+
+    $dateStr = "$($Matches[1])-$($Matches[2])-$($Matches[3])"
+
+    try {
+        $buildDate = [datetime]::ParseExact($dateStr, 'yyyy-MM-dd', [cultureinfo]::InvariantCulture)
+        $days = [math]::Round(((Get-Date).Date - $buildDate.Date).TotalDays) + 1
+        return [math]::Max(1, $days)
+    }
+    catch {
+        Write-Host "::warning::Invalid date format: $dateStr"
+        return 1
     }
 }
 
-$galleryVersion = $version -replace '-', '.'
+# ────────────────────────────────────────────────
+# Main logic
+# ────────────────────────────────────────────────
 
-$datePartMatch = [regex]::Match($version, '^\d{4}\.\d{2}\.\d{2}')
-$datePart = if ($datePartMatch.Success) { $datePartMatch.Value } else { $base }
-$imageDateStr = $datePart -replace '\.', '-'
+$baseVersion   = Get-CalVerBase
+$suffix        = Get-VersionSuffix
+$buildDate     = Get-BuildDateString
 
-try {
-    $imageDate = [datetime]::ParseExact($imageDateStr, 'yyyy-MM-dd', [cultureinfo]::InvariantCulture)
-    $ageDays = [math]::Round(((Get-Date) - $imageDate).TotalDays) + 1
-}
-catch {
-    Write-Host "::warning::Date parsing failed for age: $imageDateStr"
-    $ageDays = 1
-}
+$version       = Resolve-FinalVersion -Override $VersionOverride -Base $baseVersion -Suffix $suffix
+$galleryVer    = ConvertTo-GalleryVersion $version
+$isBeta        = $suffix -eq '-beta'
+$imageAgeDays  = Get-ImageAgeInDays $version
 
-$outputs = @(
-    "version=$version"
-    "version_tag=v$version"
-    "gallery_version=$galleryVersion"
-    "build_date=$buildDate"
-    "image_age_days=$ageDays"
-    "is_beta=$($suffix -eq '-beta')".ToLower()
-)
-
-$outputs | ForEach-Object {
-    $_ | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-}
-
-@"
+$stepSummary = @"
 ## Runner Image Version (CalVer)
 
 - **Version**         : ``$version``
-- **Gallery version** : ``$galleryVersion``
+- **Gallery version** : ``$galleryVer``
 - **Build date**      : ``$buildDate``
-- **Type**            : $(if ($suffix) { 'preview/beta' } else { 'stable' })
-- **Age**             : ≈ $ageDays days
-"@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+- **Type**            : $(if ($isBeta) {'preview/beta'} else {'stable'})
+- **Age**             : ≈ $imageAgeDays days
+"@
 
-Write-Host "Generated CalVer: $version (gallery: $galleryVersion)"
+# GitHub Actions output
+$githubOutput = [ordered]@{
+    version        = $version
+    version_tag    = "v$version"
+    gallery_version= $galleryVer
+    build_date     = $buildDate
+    image_age_days = $imageAgeDays
+    is_beta        = $isBeta.ToString().ToLower()
+}
+
+foreach ($key in $githubOutput.Keys) {
+    $value = $githubOutput[$key]
+    "$key=$value" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+}
+
+# Summary (visible in GitHub UI)
+$stepSummary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+Write-Host "Generated CalVer: $version  (gallery: $galleryVer)"
