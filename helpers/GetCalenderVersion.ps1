@@ -8,7 +8,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Get-CalVerBase {
-[OutputType([string])]
+    [OutputType([string])]
+    param()
     return [datetime]::UtcNow.ToString('yyyyMMdd')
 }
 
@@ -19,7 +20,8 @@ function Get-BuildDateString {
 }
 
 function Get-NextPatchNumber {
-param([string]$Prefix)
+    [OutputType([int])]
+    param([string]$Prefix)
     
     git fetch --tags --quiet 2>$null
     $tags = git tag --list "$Prefix.*" --sort=version:refname
@@ -30,9 +32,12 @@ param([string]$Prefix)
 }
 
 function Resolve-FinalVersion {
-param([string]$Override, [string]$Base)
+    [OutputType([string])]
+    param([string]$Override, [string]$Base)
 
-    if ($Override -and $Override.Trim()) { return $Override.Trim() }
+    if ($Override -and $Override.Trim()) { 
+        return $Override.Trim() 
+    }
 
     $patch = Get-NextPatchNumber -Prefix $Base
     
@@ -41,11 +46,9 @@ param([string]$Override, [string]$Base)
 
 function Get-ImageAgeInDays {
     [OutputType([int])]
-    param(
-        [string]$Version
-    )
+    param([string]$Version)
 
-    if ($Version -notmatch '^(\d{4})\.(\d{2})\.(\d{2})') {
+    if ($Version -notmatch '^(\d{4})(\d{2})(\d{2})') {
         Write-Host "::warning::Cannot parse date from version '$Version'"
         return 1
     }
@@ -53,33 +56,21 @@ function Get-ImageAgeInDays {
     $dateStr = "$($Matches[1])-$($Matches[2])-$($Matches[3])"
 
     try {
-        $buildDate = [datetime]::ParseExact($dateStr, 'yyyy-MM-dd', [cultureinfo]::InvariantCulture)
+        $buildDate = [datetime]::ParseExact($dateStr, 'yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture)
         $days = [math]::Round(((Get-Date).Date - $buildDate.Date).TotalDays) + 1
         return [math]::Max(1, $days)
     }
     catch {
-        Write-Host "::warning::Invalid date format: $dateStr"
         return 1
     }
 }
 
-# ────────────────────────────────────────────────
-# Main
-# ────────────────────────────────────────────────
+# --- Main Execution ---
 
-$base     = Get-CalVerBase
+$base      = Get-CalVerBase
 $buildDate = Get-BuildDateString
-$version  = Resolve-FinalVersion -Override $VersionOverride -Base $base
-$ageDays  = Get-ImageAgeInDays $version
-
-$summary = @"
-## Runner Image Version (CalVer)
-
-- **Version**     : ``$version``
-- **Build date**  : ``$buildDate``
-- **Type**        : stable
-- **Age**         : ≈ $ageDays days
-"@
+$version   = Resolve-FinalVersion -Override $VersionOverride -Base $base
+$ageDays   = Get-ImageAgeInDays -Version $version
 
 # GitHub Actions outputs
 $outputs = [ordered]@{
@@ -93,6 +84,4 @@ foreach ($key in $outputs.Keys) {
     "$key=$($outputs[$key])" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 }
 
-$summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-
-Write-Host "Generated CalVer: $version"
+Write-Host "Generated Azure Version: $version"
