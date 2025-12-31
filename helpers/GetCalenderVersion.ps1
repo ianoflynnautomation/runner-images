@@ -8,9 +8,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Get-CalVerBase {
-    [OutputType([string])]
-    param()
-    return [datetime]::UtcNow.ToString('yyyy.MM.dd')
+[OutputType([string])]
+    return [datetime]::UtcNow.ToString('yyyyMMdd')
 }
 
 function Get-BuildDateString {
@@ -20,44 +19,24 @@ function Get-BuildDateString {
 }
 
 function Get-NextPatchNumber {
-    [OutputType([int])]
-    param(
-        [Parameter(Mandatory)]
-        [string]$Prefix
-    )
-
+param([string]$Prefix)
+    
     git fetch --tags --quiet 2>$null
-
-    $tags = git tag --list "$Prefix*" --sort=version:refname
+    $tags = git tag --list "$Prefix.*" --sort=version:refname
+    
     if (-not $tags) { return 0 }
-
+    
     return ($tags -split '\n' | Where-Object { $_ }).Count
 }
 
 function Resolve-FinalVersion {
-    [OutputType([string])]
-    param(
-        [string]$Override,
-        [string]$Base
-    )
+param([string]$Override, [string]$Base)
 
-    if ($Override -and $Override.Trim()) {
-        $clean = $Override.Trim()
-        Write-Host "Using version override: $clean"
-        return $clean
-    }
+    if ($Override -and $Override.Trim()) { return $Override.Trim() }
 
     $patch = Get-NextPatchNumber -Prefix $Base
-
-    if ($patch -eq 0) {
-        return $Base
-    }
-
-    #     if ($patch -eq 0) {
-    #     return "$Base.0"
-    # }
-
-    return "$Base.$patch"
+    
+    return "$Base.$patch.0"
 }
 
 function Get-ImageAgeInDays {
