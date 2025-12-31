@@ -50,8 +50,12 @@ function Resolve-FinalVersion {
     $patch = Get-NextPatchNumber -Prefix $Base
 
     if ($patch -eq 0) {
-        return "$Base.0"
+        return $Base
     }
+
+    #     if ($patch -eq 0) {
+    #     return "$Base.0"
+    # }
 
     return "$Base.$patch"
 }

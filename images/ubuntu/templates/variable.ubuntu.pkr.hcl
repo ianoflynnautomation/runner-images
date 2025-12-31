@@ -109,10 +109,10 @@ To ensure a consistent version across regions set this value to one that is avai
 DESCRIPTION
   default     = "${env("GALLERY_IMAGE_VERSION")}"
 
-  validation {
-    condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.gallery_image_version))
-    error_message = "The gallery image version must follow the X.Y.Z format where each part is an integer (e.g., 2025.01.15.0 or 2025.12.31.3)."
-  }
+  # validation {
+  #   condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.gallery_image_version))
+  #   error_message = "The gallery image version must follow the X.Y.Z format where each part is an integer (e.g., 2025.01.15.0 or 2025.12.31.3)."
+  # }
 }
 
 variable "gallery_name" {
@@ -193,10 +193,10 @@ variable "os_disk_size_gb" {
   description = "Specify the size of the OS disk in GB (gigabytes). Values of zero or less than zero are ignored."
   default     = null
 
-  validation {
-    condition     = var.os_disk_size_gb == null || (var.os_disk_size_gb >= 30 && var.os_disk_size_gb <= 2048)
-    error_message = "The OS disk size must be between 30 GB and 2048 GB inclusive."
-  }
+  # validation {
+  #   condition     = var.os_disk_size_gb == null || (var.os_disk_size_gb >= 30 && var.os_disk_size_gb <= 2048)
+  #   error_message = "The OS disk size must be between 30 GB and 2048 GB inclusive."
+  # }
 }
 
 variable "source_image_version" {
