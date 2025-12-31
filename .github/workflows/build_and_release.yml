@@ -126,21 +126,18 @@ jobs:
           echo "Building ${{ matrix.image_definition }} (Ubuntu ${{ matrix.os_version }}) Version $IMAGE_VERSION"
 
           packer build \
-            # -only="${{ needs.version.outputs.version }}" \
+            -only="${{ matrix.image_definition }}" \
             -var="client_id=${{ secrets.AZURE_CLIENT_ID }}" \
             -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
             -var="oidc_request_token=$ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             -var="oidc_request_url=$ACTIONS_ID_TOKEN_REQUEST_URL" \
-            # -var="managed_image_name=${{ matrix.image_definition }}" \
-            # -var="managed_image_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
             -var="image_os=${{ matrix.image_os }}" \
             -var="build_resource_group_name=${{ secrets.BUILD_RG_NAME }}" \
             -var="gallery_name=${{ env.GALLERY_NAME }}" \
             -var="gallery_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
             -var="gallery_image_name=${{ matrix.image_definition }}" \
             -var="gallery_image_version=${{ needs.version.outputs.version }}" \
-            -color=false \
             ${{ env.TEMPLATE_PATH }}
         env:
           PACKER_LOG: 1
