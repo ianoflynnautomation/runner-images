@@ -56,7 +56,6 @@ catch {
     $ageDays = 1
 }
 
-# --- Write outputs ---
 $outputs = @(
     "version=$version"
     "version_tag=v$version"
@@ -70,7 +69,6 @@ $outputs | ForEach-Object {
     $_ | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 }
 
-# --- Write step summary ---
 @"
 ## Runner Image Version (CalVer)
 
