@@ -1,14 +1,12 @@
 [CmdletBinding()]
 param(
-    [Parameter()]
-    [ValidateNotNullOrEmpty()]
-    [string]$VersionOverride
+    [Parameter()][string]$VersionOverride
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Get-CalVerBase {
+Function Get-CalVerBase {
     [OutputType([string])]
     param()
 
@@ -16,14 +14,14 @@ function Get-CalVerBase {
     return $now.ToString('yyyy.MM.dd')
 }
 
-function Get-BuildDateString {
+Function Get-BuildDateString {
     [OutputType([string])]
     param()
 
     return [datetime]::UtcNow.ToString('yyyy-MM-dd')
 }
 
-function Get-NextPatchNumber {
+Function Get-NextPatchNumber {
     [OutputType([int])]
     param(
         [Parameter(Mandatory)]
@@ -41,16 +39,17 @@ function Get-NextPatchNumber {
     return ($existingTags -split '\n' | Where-Object { $_ }).Count
 }
 
-function Resolve-FinalVersion {
+Function Resolve-FinalVersion {
     [OutputType([string])]
     param(
         [string]$Override,
         [string]$Base
     )
 
-    if ($Override) {
-        Write-Host "Using version override: $Override"
-        return $Override
+   if ($Override -and $Override.Trim()) {
+        $cleanOverride = $Override.Trim()
+        Write-Host "Using version override: $cleanOverride"
+        return $cleanOverride
     }
 
     $prefix = $Base
@@ -64,7 +63,7 @@ function Resolve-FinalVersion {
     return "$prefix.$patch"
 }
 
-function ConvertTo-GalleryVersion {
+Function ConvertTo-GalleryVersion {
     [OutputType([string])]
     param(
         [Parameter(Mandatory)]
@@ -75,7 +74,7 @@ function ConvertTo-GalleryVersion {
     return $SemverVersion -replace '-', '.'
 }
 
-function Get-ImageAgeInDays {
+Function Get-ImageAgeInDays {
     [OutputType([int])]
     param(
         [string]$Version
