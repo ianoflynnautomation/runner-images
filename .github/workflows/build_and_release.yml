@@ -34,12 +34,10 @@ jobs:
     name: Generate Version
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.calver.outputs.version }}
-      version_tag: ${{ steps.calver.outputs.version_tag }}
-      is_release: ${{ steps.calver.outputs.is_release }}
-      build_date: ${{ steps.calver.outputs.build_date }}
-      image_age_days: ${{ steps.calver.outputs.image_age_days }}
-      gallery_version: ${{ steps.calver.outputs.gallery_version }}
+      version:         ${{ steps.calver.outputs.version }}
+      version_tag:     ${{ steps.calver.outputs.version_tag }}
+      build_date:      ${{ steps.calver.outputs.build_date }}
+      image_age_days:  ${{ steps.calver.outputs.image_age_days }}
 
     steps:
       - name: Checkout
@@ -125,7 +123,7 @@ jobs:
 
       - name: Build Image with Packer
         run: |
-          echo "Building ${{ matrix.image_definition }} (Ubuntu ${{ matrix.os_version }}) - Version ${{ needs.version.outputs.version }}"
+          echo "Building ${{ matrix.image_definition }} (Ubuntu ${{ matrix.os_version }}) Version $IMAGE_VERSION"
 
           packer build \
             # -only="${{ needs.version.outputs.version }}" \
@@ -141,7 +139,7 @@ jobs:
             -var="gallery_name=${{ env.GALLERY_NAME }}" \
             -var="gallery_resource_group_name=${{ secrets.IMAGE_RESOURCE_GROUP }}" \
             -var="gallery_image_name=${{ matrix.image_definition }}" \
-            -var="gallery_image_version=${{ needs.version.outputs.gallery_version }}" \
+            -var="gallery_image_version=${{ needs.version.outputs.version }}" \
             -color=false \
             ${{ env.TEMPLATE_PATH }}
         env:
