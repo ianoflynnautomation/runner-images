@@ -1,14 +1,14 @@
 source "azure-arm" "image" {
-  client_cert_path                       = var.client_cert_path
-  client_id                              = var.client_id
-  client_secret                          = var.client_secret
-  object_id                              = var.object_id
-  oidc_request_token                     = var.oidc_request_token
-  oidc_request_url                       = var.oidc_request_url
-  subscription_id                        = var.subscription_id
-  tenant_id                              = var.tenant_id
-  use_azure_cli_auth                     = var.use_azure_cli_auth
-  skip_create_image                      = var.skip_create_image
+  client_cert_path   = var.client_cert_path
+  client_id          = var.client_id
+  client_secret      = var.client_secret
+  object_id          = var.object_id
+  oidc_request_token = var.oidc_request_token
+  oidc_request_url   = var.oidc_request_url
+  subscription_id    = var.subscription_id
+  tenant_id          = var.tenant_id
+  use_azure_cli_auth = var.use_azure_cli_auth
+  skip_create_image  = var.skip_create_image
 
   allowed_inbound_ip_addresses           = var.allowed_inbound_ip_addresses
   build_resource_group_name              = var.build_resource_group_name
@@ -32,12 +32,12 @@ source "azure-arm" "image" {
   winrm_username                         = var.winrm_username
 
   shared_image_gallery_destination {
-    subscription                         = var.subscription_id
-    gallery_name                         = var.gallery_name
-    resource_group                       = var.gallery_resource_group_name
-    image_name                           = var.gallery_image_name
-    image_version                        = var.gallery_image_version
-    storage_account_type                 = var.gallery_storage_account_type
+    subscription         = var.subscription_id
+    gallery_name         = var.gallery_name
+    resource_group       = var.gallery_resource_group_name
+    image_name           = var.gallery_image_name
+    image_version        = var.gallery_image_version
+    storage_account_type = var.gallery_storage_account_type
   }
 
   shared_image_gallery_timeout                     = var.shared_image_gallery_timeout
@@ -47,7 +47,7 @@ source "azure-arm" "image" {
   spot {
     eviction_policy = var.spot_instance.enabled ? var.spot_instance.eviction_policy : ""
     max_price       = var.spot_instance.enabled ? var.spot_instance.max_price : -1
-}
+  }
 
   dynamic "azure_tag" {
     for_each = var.azure_tags
