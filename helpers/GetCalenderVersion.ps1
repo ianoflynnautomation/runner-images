@@ -9,10 +9,6 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Get-CalVerBase {
-    <#
-    .SYNOPSIS
-        Returns yyyy.MM.dd string based on current UTC date
-    #>
     [OutputType([string])]
     param()
 
@@ -25,16 +21,6 @@ function Get-BuildDateString {
     param()
 
     return [datetime]::UtcNow.ToString('yyyy-MM-dd')
-}
-
-function Get-VersionSuffix {
-    [OutputType([string])]
-    param()
-
-    if ($env:GITHUB_REF -eq 'refs/heads/develop') {
-        return '-beta'
-    }
-    return ''
 }
 
 function Get-NextPatchNumber {
@@ -59,8 +45,7 @@ function Resolve-FinalVersion {
     [OutputType([string])]
     param(
         [string]$Override,
-        [string]$Base,
-        [string]$Suffix
+        [string]$Base
     )
 
     if ($Override) {
@@ -68,7 +53,7 @@ function Resolve-FinalVersion {
         return $Override
     }
 
-    $prefix = "$Base$Suffix"
+    $prefix = $Base
 
     $patch = Get-NextPatchNumber -Prefix $prefix
 
@@ -86,6 +71,7 @@ function ConvertTo-GalleryVersion {
         [string]$SemverVersion
     )
 
+    # No -beta anymore → no replacement needed, but kept for future-proofing
     return $SemverVersion -replace '-', '.'
 }
 
@@ -118,12 +104,10 @@ function Get-ImageAgeInDays {
 # ────────────────────────────────────────────────
 
 $baseVersion   = Get-CalVerBase
-$suffix        = Get-VersionSuffix
 $buildDate     = Get-BuildDateString
 
-$version       = Resolve-FinalVersion -Override $VersionOverride -Base $baseVersion -Suffix $suffix
+$version       = Resolve-FinalVersion -Override $VersionOverride -Base $baseVersion
 $galleryVer    = ConvertTo-GalleryVersion $version
-$isBeta        = $suffix -eq '-beta'
 $imageAgeDays  = Get-ImageAgeInDays $version
 
 $stepSummary = @"
@@ -132,18 +116,18 @@ $stepSummary = @"
 - **Version**         : ``$version``
 - **Gallery version** : ``$galleryVer``
 - **Build date**      : ``$buildDate``
-- **Type**            : $(if ($isBeta) {'preview/beta'} else {'stable'})
+- **Type**            : stable
 - **Age**             : ≈ $imageAgeDays days
 "@
 
 # GitHub Actions output
 $githubOutput = [ordered]@{
-    version        = $version
-    version_tag    = "v$version"
-    gallery_version= $galleryVer
-    build_date     = $buildDate
-    image_age_days = $imageAgeDays
-    is_beta        = $isBeta.ToString().ToLower()
+    version         = $version
+    version_tag     = "v$version"
+    gallery_version = $galleryVer
+    build_date      = $buildDate
+    image_age_days  = $imageAgeDays
+    is_beta         = 'false'
 }
 
 foreach ($key in $githubOutput.Keys) {
